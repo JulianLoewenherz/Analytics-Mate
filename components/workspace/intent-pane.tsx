@@ -1,8 +1,6 @@
 "use client";
 
-import React from "react"
-
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Search,
   ChevronDown,
@@ -12,12 +10,20 @@ import {
   GitBranch,
   BarChart3,
   Target,
+  Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const EXAMPLE_QUESTIONS = [
   "How many people are bicycling?",
@@ -65,8 +71,14 @@ const MOCK_PLAN: PlanStep[] = [
   },
 ];
 
-export function IntentPane() {
+interface IntentPaneProps {
+  videoId: string | null;
+  onVideoSelect: (videoId: string | null) => void;
+}
+
+export function IntentPane({ videoId, onVideoSelect }: IntentPaneProps) {
   const [query, setQuery] = useState("");
+  const [previousVideos, setPreviousVideos] = useState<{ video_id: string }[]>([]);
   const [planExpanded, setPlanExpanded] = useState(true);
   const [paramsExpanded, setParamsExpanded] = useState(true);
   const [confidenceThreshold, setConfidenceThreshold] = useState([50]);
@@ -75,6 +87,14 @@ export function IntentPane() {
   const handleExampleClick = (q: string) => {
     setQuery(q);
   };
+
+  // Fetch list of previously uploaded videos on mount
+  useEffect(() => {
+    fetch("http://localhost:8000/api/videos")
+      .then((res) => res.ok ? res.json() : Promise.reject(res))
+      .then((data) => setPreviousVideos(data.videos ?? []))
+      .catch(() => setPreviousVideos([]));
+  }, []);
 
   return (
     <div className="flex h-full flex-col bg-card">
@@ -93,6 +113,46 @@ export function IntentPane() {
 
       <ScrollArea className="flex-1">
         <div className="p-4 flex flex-col gap-4">
+          {/* Load video dropdown */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Video className="h-3.5 w-3.5" />
+              Load video
+            </label>
+            <Select
+              value={videoId ?? ""}
+              onValueChange={(v) => onVideoSelect(v || null)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a previously uploaded video" />
+              </SelectTrigger>
+              <SelectContent>
+                {(() => {
+                // Include current videoId if not in list (e.g. just uploaded)
+                const ids = new Set(previousVideos.map((v) => v.video_id));
+                const list =
+                  videoId && !ids.has(videoId)
+                    ? [{ video_id: videoId }, ...previousVideos]
+                    : previousVideos;
+                if (list.length === 0) {
+                  return (
+                    <SelectItem value="__empty__" disabled>
+                      No videos found
+                    </SelectItem>
+                  );
+                }
+                return list.map((v) => (
+                  <SelectItem key={v.video_id} value={v.video_id}>
+                    {v.video_id}
+                  </SelectItem>
+                ));
+              })()}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Separator />
+
           {/* Prompt box */}
           <div className="flex flex-col gap-2">
             <label

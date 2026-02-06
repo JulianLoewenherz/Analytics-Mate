@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -11,6 +12,8 @@ import { ResultsPane } from "./results-pane";
 import { RunControls } from "./run-controls";
 
 export function Workspace() {
+  const [videoId, setVideoId] = useState<string | null>(null);
+
   return (
     <div className="flex h-screen flex-col">
       {/* Top bar */}
@@ -35,14 +38,14 @@ export function Workspace() {
         <ResizablePanelGroup direction="horizontal">
           {/* Left — Intent */}
           <ResizablePanel defaultSize={22} minSize={16} maxSize={35}>
-            <IntentPane />
+            <IntentPane videoId={videoId} onVideoSelect={setVideoId} />
           </ResizablePanel>
 
           <ResizableHandle />
 
           {/* Center — Evidence */}
           <ResizablePanel defaultSize={50} minSize={30}>
-            <EvidencePane />
+            <EvidencePane videoId={videoId} onVideoIdChange={setVideoId} />
           </ResizablePanel>
 
           <ResizableHandle />

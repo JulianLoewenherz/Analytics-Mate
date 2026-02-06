@@ -143,7 +143,7 @@ export function ROICanvas({ frameImage, onSave, onCancel }: ROICanvasProps) {
 
     // Draw polygon fill when complete
     if (isComplete && points.length >= 3) {
-      ctx.fillStyle = "rgba(59, 130, 246, 0.25)";
+      ctx.fillStyle = "rgba(34, 197, 94, 0.35)";
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].y);
       for (let i = 1; i < points.length; i++) {
@@ -154,7 +154,7 @@ export function ROICanvas({ frameImage, onSave, onCancel }: ROICanvasProps) {
     }
 
     // Draw lines
-    ctx.strokeStyle = "rgb(59, 130, 246)";
+    ctx.strokeStyle = "rgb(34, 197, 94)";
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
@@ -172,7 +172,7 @@ export function ROICanvas({ frameImage, onSave, onCancel }: ROICanvasProps) {
     points.forEach((pt, i) => {
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, POINT_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = hoveredPoint === i ? "rgb(96, 165, 250)" : "rgb(59, 130, 246)";
+      ctx.fillStyle = hoveredPoint === i ? "rgb(74, 222, 128)" : "rgb(34, 197, 94)";
       ctx.fill();
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 1;

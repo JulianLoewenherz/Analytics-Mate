@@ -7,16 +7,19 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ROICanvas, type Point } from "./roi-canvas";
 
-export function EvidencePane() {
+interface EvidencePaneProps {
+  videoId: string | null;
+  onVideoIdChange: (videoId: string | null) => void;
+}
+
+export function EvidencePane({ videoId, onVideoIdChange }: EvidencePaneProps) {
   const [hasVideo, setHasVideo] = useState(false);
   const [videoMetadata, setVideoMetadata] = useState<{
     fps: number;
     frameCount: number;
     duration: number;
   } | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
-  const [videoId, setVideoId] = useState<string | null>(null);
 
   // ROI state (persisted via backend)
   const [showROICanvas, setShowROICanvas] = useState(false);
@@ -45,7 +48,6 @@ export function EvidencePane() {
       type: file.type
     });
     
-    setSelectedFile(file);
     setUploadStatus("uploading");
     
     try {
@@ -67,29 +69,10 @@ export function EvidencePane() {
       const data = await response.json();
       console.log('✅ Upload successful!', data);
       
-      // Save the video_id for later use
-      const videoId = data.video_id;
-      setVideoId(videoId);
-      
-      // Fetch real metadata from backend using OpenCV
-      const metadataResponse = await fetch(`http://localhost:8000/api/video/${videoId}/metadata`);
-      
-      if (!metadataResponse.ok) {
-        throw new Error('Failed to fetch metadata');
-      }
-      
-      const metadata = await metadataResponse.json();
-      console.log('📊 Metadata extracted:', metadata);
-      
-      // Update UI with real metadata
-      setVideoMetadata({
-        fps: metadata.fps,
-        frameCount: metadata.frame_count,
-        duration: metadata.duration
-      });
-      
+      // Save the video_id - metadata will be fetched by useEffect
+      const newVideoId = data.video_id;
+      onVideoIdChange(newVideoId);
       setUploadStatus("success");
-      setHasVideo(true);
       
     } catch (error) {
       console.error('❌ Upload failed:', error);
@@ -151,6 +134,36 @@ export function EvidencePane() {
     setRoiFrameImage(null);
   }, []);
 
+  // Fetch metadata when videoId changes (from upload or Load video dropdown)
+  useEffect(() => {
+    if (!videoId) {
+      setHasVideo(false);
+      setVideoMetadata(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/video/${videoId}/metadata`);
+        if (cancelled) return;
+        if (res.ok) {
+          const metadata = await res.json();
+          setVideoMetadata({
+            fps: metadata.fps,
+            frameCount: metadata.frame_count,
+            duration: metadata.duration,
+          });
+          setHasVideo(true);
+        }
+      } catch (e) {
+        if (!cancelled) console.error("Failed to fetch metadata", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [videoId]);
+
   // Load saved ROI when video is set (e.g. after upload or page load with same video)
   useEffect(() => {
     if (!videoId) return;
@@ -163,9 +176,13 @@ export function EvidencePane() {
           const data = await res.json();
           if (data.polygon && Array.isArray(data.polygon) && data.polygon.length >= 3) {
             setSavedROI(data.polygon as Point[]);
+          } else {
+            setSavedROI(null);
           }
+        } else {
+          // 404 or error: this video has no saved ROI
+          setSavedROI(null);
         }
-        // 404 or no polygon: leave savedROI as-is (e.g. null)
       } catch {
         if (!cancelled) console.error("Failed to load ROI");
       }
@@ -221,8 +238,8 @@ export function EvidencePane() {
                     >
                       <polygon
                         points={savedROI.map((p) => `${p.x},${p.y}`).join(" ")}
-                        fill="rgba(59, 130, 246, 0.25)"
-                        stroke="rgb(59, 130, 246)"
+                        fill="rgba(34, 197, 94, 0.35)"
+                        stroke="rgb(34, 197, 94)"
                         strokeWidth={2}
                       />
                     </svg>

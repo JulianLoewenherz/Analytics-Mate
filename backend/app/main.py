@@ -53,6 +53,20 @@ async def root():
     return {"status": "ok", "message": "Video Analytics Backend is running"}
 
 
+@app.get("/api/videos")
+async def list_videos():
+    """
+    List all uploaded videos by scanning the uploads folder for *.mp4 files.
+    Returns video_id (filename without .mp4) for each file.
+    """
+    videos = []
+    if UPLOAD_DIR.exists():
+        for path in UPLOAD_DIR.glob("*.mp4"):
+            video_id = path.stem
+            videos.append({"video_id": video_id})
+    return {"videos": videos}
+
+
 @app.post("/api/upload")
 async def upload_video(file: UploadFile = File(...)):
     """
