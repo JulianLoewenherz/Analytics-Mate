@@ -1,12 +1,21 @@
-# v0 runtime files (should only exist in preview, not in git)
-__v0_runtime_loader.js
-__v0_devtools.tsx
-__v0_jsx-dev-runtime.ts
-instrumentation-client.js
-instrumentation-client.ts
+# Python
+**/__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
 
-# Common ignores
+# Video uploads
+backend/uploads/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Next.js
 node_modules/
 .next/
-.env*.local
-.DS_Store
+out/

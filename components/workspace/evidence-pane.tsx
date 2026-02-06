@@ -24,6 +24,7 @@ export function EvidencePane() {
   } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  const [videoId, setVideoId] = useState<string | null>(null);
   
   // Reference to hidden file input
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -74,16 +75,29 @@ export function EvidencePane() {
       const data = await response.json();
       console.log('✅ Upload successful!', data);
       
-      // Update UI to show success
+      // Save the video_id for later use
+      const videoId = data.video_id;
+      setVideoId(videoId);
+      
+      // Fetch real metadata from backend using OpenCV
+      const metadataResponse = await fetch(`http://localhost:8000/api/video/${videoId}/metadata`);
+      
+      if (!metadataResponse.ok) {
+        throw new Error('Failed to fetch metadata');
+      }
+      
+      const metadata = await metadataResponse.json();
+      console.log('📊 Metadata extracted:', metadata);
+      
+      // Update UI with real metadata
+      setVideoMetadata({
+        fps: metadata.fps,
+        frameCount: metadata.frame_count,
+        duration: metadata.duration
+      });
+      
       setUploadStatus("success");
       setHasVideo(true);
-      
-      // Mock metadata for now (will be replaced with real OpenCV data in next step)
-      setVideoMetadata({
-        fps: 30,
-        frameCount: 900,
-        duration: 30
-      });
       
     } catch (error) {
       console.error('❌ Upload failed:', error);
@@ -116,20 +130,20 @@ export function EvidencePane() {
       <div className="relative flex-1 m-3 rounded-lg border border-border bg-card overflow-hidden">
         {hasVideo ? (
           <>
-            {/* Video player - will be wired up to backend */}
+            {/* Video player - loads video from backend */}
             <div className="absolute inset-0 bg-black flex items-center justify-center">
-              <video
-                className="w-full h-full object-contain"
-                controls={false}
-                aria-label="Uploaded video"
-              >
-                {/* Video source will be set via JavaScript after upload */}
-              </video>
-              <div className="absolute inset-0 flex items-center justify-center">
+              {videoId ? (
+                <video
+                  src={`http://localhost:8000/api/video/${videoId}`}
+                  className="w-full h-full object-contain"
+                  controls={true}
+                  aria-label="Uploaded video"
+                />
+              ) : (
                 <span className="text-xs text-muted-foreground/40 font-mono">
-                  VIDEO PLAYER
+                  LOADING VIDEO...
                 </span>
-              </div>
+              )}
             </div>
 
             {/* Video metadata overlay */}
