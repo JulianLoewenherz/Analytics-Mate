@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Play,
   Pause,
@@ -22,11 +22,79 @@ export function EvidencePane() {
     frameCount: number;
     duration: number;
   } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  
+  // Reference to hidden file input
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Handle file selection
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    
+    if (!file) return;
+    
+    // Validate it's a video file
+    if (!file.type.startsWith('video/')) {
+      alert('Please select a valid video file');
+      return;
+    }
+    
+    console.log('📹 Video file selected:', {
+      name: file.name,
+      size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+      type: file.type
+    });
+    
+    setSelectedFile(file);
+    setUploadStatus("uploading");
+    
+    try {
+      // Create FormData to send file to backend
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // Upload file to backend
+      const response = await fetch('http://localhost:8000/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+      
+      // Get video_id from backend response
+      const data = await response.json();
+      console.log('✅ Upload successful!', data);
+      
+      // Update UI to show success
+      setUploadStatus("success");
+      setHasVideo(true);
+      
+      // Mock metadata for now (will be replaced with real OpenCV data in next step)
+      setVideoMetadata({
+        fps: 30,
+        frameCount: 900,
+        duration: 30
+      });
+      
+    } catch (error) {
+      console.error('❌ Upload failed:', error);
+      setUploadStatus("error");
+      alert('Upload failed. Make sure the backend is running at http://localhost:8000');
+    }
+  };
+
+  // Trigger file input click
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
   };
 
   return (
@@ -84,20 +152,27 @@ export function EvidencePane() {
                 Upload a video
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Drag and drop or click to browse
+                {uploadStatus === "uploading" ? "Uploading..." : "Click to browse"}
               </p>
             </div>
             <Button
               variant="outline"
               size="sm"
               className="mt-1 bg-transparent"
-              onClick={() => {
-                // TODO: Wire up to file input and backend upload
-                console.log("Upload clicked - wire to backend");
-              }}
+              onClick={handleUploadClick}
+              disabled={uploadStatus === "uploading"}
             >
-              Choose file
+              {uploadStatus === "uploading" ? "Uploading..." : "Choose file"}
             </Button>
+            
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
           </div>
         )}
       </div>
