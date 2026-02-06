@@ -6,10 +6,19 @@ Receives video files from frontend, saves them, and extracts metadata using Open
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 import uuid
 import shutil
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 from app.core.decode import extract_metadata
+
+
+class ROISaveBody(BaseModel):
+    """Request body for POST /api/video/{video_id}/roi. Polygon in video pixel coordinates."""
+    polygon: list[dict]  # [{"x": number, "y": number}, ...]
+    name: str | None = None
 
 # Create FastAPI app instance
 app = FastAPI(title="Video Analytics Backend")
@@ -29,6 +38,13 @@ UPLOAD_DIR = Path("uploads")
 
 # Create uploads folder if it doesn't exist
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+# ROI storage: JSON file under app/storage/
+STORAGE_DIR = Path(__file__).parent / "storage"
+ROI_STORAGE_PATH = STORAGE_DIR / "roi_storage.json"
+STORAGE_DIR.mkdir(exist_ok=True)
+if not ROI_STORAGE_PATH.exists():
+    ROI_STORAGE_PATH.write_text("{}")
 
 
 @app.get("/")
@@ -134,3 +150,69 @@ async def get_video(video_id: str):
         media_type="video/mp4",
         filename=f"{video_id}.mp4"
     )
+
+
+def _load_roi_storage() -> dict:
+    """Load roi_storage.json. Returns dict keyed by video_id."""
+    if not ROI_STORAGE_PATH.exists():
+        return {}
+    text = ROI_STORAGE_PATH.read_text()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return {}
+
+
+def _save_roi_storage(data: dict) -> None:
+    """Write roi_storage.json."""
+    ROI_STORAGE_PATH.write_text(json.dumps(data, indent=2))
+
+
+@app.post("/api/video/{video_id}/roi")
+async def save_roi(video_id: str, body: ROISaveBody):
+    """
+    Save ROI polygon for a video.
+
+    Expects JSON: {"polygon": [{"x": 100, "y": 200}, ...], "name": "optional"}.
+    Validates at least 3 points with numeric x, y.
+    """
+    polygon = body.polygon
+    if not isinstance(polygon, list) or len(polygon) < 3:
+        raise HTTPException(
+            status_code=400,
+            detail="polygon must have at least 3 points"
+        )
+    for i, pt in enumerate(polygon):
+        if not isinstance(pt, dict) or "x" not in pt or "y" not in pt:
+            raise HTTPException(
+                status_code=400,
+                detail=f"point {i} must be {{x: number, y: number}}"
+            )
+        try:
+            float(pt["x"])
+            float(pt["y"])
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail=f"point {i} must have numeric x and y"
+            )
+
+    storage = _load_roi_storage()
+    storage[video_id] = {
+        "polygon": polygon,
+        "name": body.name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _save_roi_storage(storage)
+    return {"status": "ok", "video_id": video_id}
+
+
+@app.get("/api/video/{video_id}/roi")
+async def get_roi(video_id: str):
+    """
+    Retrieve saved ROI for a video. Returns 404 if no ROI stored.
+    """
+    storage = _load_roi_storage()
+    if video_id not in storage:
+        raise HTTPException(status_code=404, detail="ROI not found")
+    return storage[video_id]
