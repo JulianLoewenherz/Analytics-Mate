@@ -8,3 +8,6 @@ numpy==1.24.3             # Required by OpenCV
 # Phase 1: Vision + Pipeline
 ultralytics>=8.3.0        # YOLO detection, tracking (ByteTrack), and pose
 shapely>=2.0.0            # Polygon geometry for ROI point-in-polygon
+
+# Phase 2: LLM Planner
+openai>=1.0.0             # OpenAI API for GPT-4o-mini (prompt -> plan)

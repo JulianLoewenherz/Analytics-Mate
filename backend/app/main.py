@@ -18,6 +18,11 @@ from pathlib import Path
 from app.core.decode import extract_metadata
 from app.pipeline.runner import run_pipeline
 from app.pipeline.registry import get_available_tasks
+from app.pipeline.schema import AnalysisPlan
+from app.planner.llm import generate_plan
+
+from dotenv import load_dotenv
+load_dotenv()  # Load .env before other imports that read env vars
 
 # Configure logging for pipeline visibility
 logging.basicConfig(
@@ -34,9 +39,14 @@ class ROISaveBody(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    """Request body for POST /api/video/{video_id}/analyze."""
-    plan: dict  # The analysis plan (Phase 1: hardcoded, Phase 2: from LLM)
-    # Future: prompt: Optional[str] = None  # Natural language prompt (Phase 2)
+    """Request body for POST /api/video/{video_id}/analyze.
+
+    Provide either:
+    - prompt: Natural language question (e.g. "How many people loiter for 10 seconds?")
+    - plan: Structured analysis plan dict (e.g. { "task": "dwell_count", ... })
+    """
+    prompt: Optional[str] = None  # Natural language -> LLM produces plan
+    plan: Optional[dict] = None   # Direct plan (Phase 1 style)
 
 # Create FastAPI app instance
 app = FastAPI(title="Video Analytics Backend")
@@ -259,75 +269,98 @@ async def analyze_video(video_id: str, body: AnalyzeRequest):
     """
     Run the analysis pipeline on a video.
 
-    Accepts a plan dict specifying which task to run and with what parameters.
+    Accepts either:
+    - prompt: Natural language question → LLM produces plan → pipeline runs
+    - plan: Structured plan dict → pipeline runs directly
+
     If the plan requires an ROI (use_roi: true) but no ROI is saved for this video,
     returns status "needs_roi" instead of running the pipeline.
 
-    Phase 1: Accepts hardcoded plan (no LLM).
-    Phase 2: Will also accept { "prompt": "..." } and use LLM to generate the plan.
+    Request body (prompt):
+        { "prompt": "How many people loiter for more than 10 seconds?" }
 
-    Request body:
-        {
-            "plan": {
-                "task": "dwell_count",
-                "object": "person",
-                "use_roi": true,
-                "params": { "dwell_threshold_seconds": 10 }
-            }
-        }
+    Request body (plan):
+        { "plan": { "task": "dwell_count", "object": "person", "use_roi": true, "params": { "dwell_threshold_seconds": 10 } } }
 
     Responses:
         200 with status "ok": Pipeline ran successfully, includes results.
         200 with status "needs_roi": Plan requires ROI but none exists for this video.
         404: Video not found.
-        400: Invalid plan (unknown task, etc.).
+        400: Invalid plan, unknown task, or missing prompt/plan.
     """
-    plan = body.plan
+    # Require either prompt or plan
+    if not body.prompt and not body.plan:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either 'prompt' (natural language) or 'plan' (structured JSON).",
+        )
 
-    # Validate video exists
     video_path = UPLOAD_DIR / f"{video_id}.mp4"
     if not video_path.exists():
         raise HTTPException(status_code=404, detail="Video not found")
 
-    # Validate task name
-    task_name = plan.get("task")
-    available = get_available_tasks()
-    if not task_name or task_name not in available:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown or missing task '{task_name}'. Available tasks: {available}",
-        )
+    plan: AnalysisPlan
+
+    if body.prompt and body.prompt.strip():
+        # Path A: Prompt → LLM → Plan
+        try:
+            video_meta = extract_metadata(str(video_path))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to extract video metadata: {e}")
+
+        storage = _load_roi_storage()
+        roi_exists = video_id in storage and storage[video_id].get("polygon") is not None
+
+        try:
+            plan = await generate_plan(
+                prompt=body.prompt.strip(),
+                video_id=video_id,
+                video_meta=video_meta,
+                roi_exists=roi_exists,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    else:
+        # Path B: Plan provided directly
+        try:
+            plan = AnalysisPlan.model_validate(body.plan)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid plan: {e}")
+
+        if plan.task.value not in get_available_tasks():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown task '{plan.task.value}'. Available tasks: {get_available_tasks()}",
+            )
 
     # Check if ROI is needed but not available
-    use_roi = plan.get("use_roi", False)
     roi_polygon = None
-
-    if use_roi:
+    if plan.use_roi:
         storage = _load_roi_storage()
         if video_id in storage:
             roi_polygon = storage[video_id].get("polygon")
         else:
-            # Plan needs ROI but none exists — return needs_roi status
-            roi_instruction = plan.get("roi_instruction", None)
+            roi_instruction = plan.roi_instruction or "Draw a region of interest around the area you want to analyze."
             return {
                 "status": "needs_roi",
-                "plan": plan,
-                "roi_instruction": roi_instruction or "Draw a region of interest around the area you want to analyze.",
+                "plan": plan.model_dump(mode="json"),
+                "roi_instruction": roi_instruction,
                 "message": "This analysis needs a region of interest. Draw one on the video, then run again.",
             }
 
     # Run the pipeline
     try:
-        logger.info(f"Starting analysis for video {video_id}, task={task_name}")
+        logger.info(f"Starting analysis for video {video_id}, task={plan.task.value}")
         result = await run_pipeline(
             video_path=str(video_path),
-            plan=plan,
+            plan=plan.to_plan_dict(),
             roi_polygon=roi_polygon,
         )
 
         return {
             "status": "ok",
-            "plan": plan,
+            "plan": plan.model_dump(mode="json"),
             "result": result,
         }
 

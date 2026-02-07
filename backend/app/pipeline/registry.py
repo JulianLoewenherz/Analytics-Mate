@@ -25,3 +25,15 @@ TASK_REGISTRY: dict[str, Callable] = {
 def get_available_tasks() -> list[str]:
     """Return list of registered task names."""
     return list(TASK_REGISTRY.keys())
+
+
+def get_task_docs() -> str:
+    """Return task descriptions for the LLM system prompt."""
+    docs = []
+    docstrings = {
+        "dwell_count": "For each track, compute how long its center stays inside the ROI. Emit events for tracks that dwell >= threshold. Use for: loitering, queue wait time, display engagement.",
+    }
+    for name in TASK_REGISTRY:
+        desc = docstrings.get(name, name.replace("_", " "))
+        docs.append(f"- {name}: {desc}")
+    return "\n".join(docs)
