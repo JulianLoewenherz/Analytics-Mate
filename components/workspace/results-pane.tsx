@@ -20,93 +20,88 @@ function formatAggregateValue(value: unknown): string {
   return String(value);
 }
 
+function formatTime(seconds: number): string {
+  if (typeof seconds !== "number" || isNaN(seconds)) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `0:${s.toString().padStart(2, "0")}`;
+}
+
 interface ResultsPaneProps {
-  result?: { aggregates?: Record<string, unknown> } | null;
+  result?: {
+    aggregates?: Record<string, unknown>;
+    events?: Record<string, unknown>[];
+    metadata?: Record<string, unknown>;
+  } | null;
 }
 
-interface Event {
-  id: string;
-  type: string;
-  description: string;
-  timestamp: string;
-  frame: number;
+function DwellEventCard({ event, index }: { event: Record<string, unknown>; index: number }) {
+  const trackId = event.track_id as number;
+  const durationSec = event.duration_sec as number;
+  const startSec = (event.start_time_sec as number) ?? 0;
+  const endSec = (event.end_time_sec as number) ?? 0;
+
+  return (
+    <div
+      className="flex flex-col gap-1 rounded-md border border-border bg-background p-2.5"
+      key={index}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-muted-foreground">Track {trackId}</span>
+        <span className="text-sm font-bold font-mono text-foreground">
+          {typeof durationSec === "number" ? durationSec.toFixed(1) : durationSec}s
+        </span>
+      </div>
+      <span className="text-[11px] font-mono text-muted-foreground">
+        {formatTime(startSec)} → {formatTime(endSec)}
+      </span>
+    </div>
+  );
 }
 
-const MOCK_EVENTS: Event[] = [
-  {
-    id: "e1",
-    type: "crossing",
-    description: "Person entered ROI (northbound)",
-    timestamp: "0:12",
-    frame: 360,
-  },
-  {
-    id: "e2",
-    type: "crossing",
-    description: "Cyclist passed through ROI",
-    timestamp: "0:24",
-    frame: 720,
-  },
-  {
-    id: "e3",
-    type: "dwell",
-    description: "Person dwelled for 45s near entrance",
-    timestamp: "0:38",
-    frame: 1140,
-  },
-  {
-    id: "e4",
-    type: "crossing",
-    description: "Dog entered ROI with owner",
-    timestamp: "0:52",
-    frame: 1560,
-  },
-  {
-    id: "e5",
-    type: "signal",
-    description: "Walk signal cycle completed (12 crossings)",
-    timestamp: "1:05",
-    frame: 1950,
-  },
-  {
-    id: "e6",
-    type: "crossing",
-    description: "2 people entered ROI (southbound)",
-    timestamp: "1:18",
-    frame: 2340,
-  },
-  {
-    id: "e7",
-    type: "dwell",
-    description: "Person dwelled for 22s at bench",
-    timestamp: "1:32",
-    frame: 2760,
-  },
-  {
-    id: "e8",
-    type: "signal",
-    description: "Walk signal cycle completed (8 crossings)",
-    timestamp: "1:45",
-    frame: 3150,
-  },
-];
+function GenericEventCard({ event, index }: { event: Record<string, unknown>; index: number }) {
+  const type = (event.type as string) ?? "event";
+  const entries = Object.entries(event).filter(([k]) => k !== "type");
 
-function getEventBadgeVariant(type: string) {
-  switch (type) {
-    case "crossing":
-      return "default";
-    case "dwell":
-      return "secondary";
-    case "signal":
-      return "outline";
-    default:
-      return "secondary";
+  return (
+    <div
+      className="flex flex-col gap-1 rounded-md border border-border bg-background p-2.5"
+      key={index}
+    >
+      <Badge variant="secondary" className="text-[10px] w-fit">
+        {type}
+      </Badge>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+        {entries.map(([k, v]) => (
+          <span key={k}>
+            {k}: {String(v)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EventCard({
+  event,
+  index,
+  task,
+}: {
+  event: Record<string, unknown>;
+  index: number;
+  task?: string;
+}) {
+  if (task === "dwell_count") {
+    return <DwellEventCard event={event} index={index} />;
   }
+  return <GenericEventCard event={event} index={index} />;
 }
 
 export function ResultsPane({ result }: ResultsPaneProps) {
   const aggregates = result?.aggregates ?? {};
   const aggregateEntries = Object.entries(aggregates);
+  const events = (result?.events ?? []) as Record<string, unknown>[];
+  const task = result?.metadata?.task as string | undefined;
 
   return (
     <div className="flex h-full flex-col bg-card">
@@ -155,44 +150,27 @@ export function ResultsPane({ result }: ResultsPaneProps) {
 
           <Separator />
 
-          {/* Event list */}
+          {/* Event list — layout per task type */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                 Events
               </span>
               <span className="text-[11px] text-muted-foreground">
-                {MOCK_EVENTS.length} total
+                {events.length} total
               </span>
             </div>
 
-            <div className="flex flex-col gap-1">
-              {MOCK_EVENTS.map((event) => (
-                <button
-                  key={event.id}
-                  type="button"
-                  className="flex items-start gap-2.5 rounded-md border border-border bg-background p-2.5 text-left hover:bg-secondary/50 transition-colors group w-full"
-                  aria-label={`Jump to ${event.description} at ${event.timestamp}`}
-                >
-                  <span className="text-[11px] font-mono text-muted-foreground w-8 pt-0.5 shrink-0">
-                    {event.timestamp}
-                  </span>
-                  <div className="flex flex-1 flex-col gap-1 min-w-0">
-                    <span className="text-xs text-foreground leading-relaxed">
-                      {event.description}
-                    </span>
-                    <Badge
-                      variant={getEventBadgeVariant(event.type)}
-                      className="text-[10px] w-fit"
-                    >
-                      {event.type}
-                    </Badge>
-                  </div>
-                  <span className="text-[10px] font-mono text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity pt-0.5 shrink-0">
-                    Jump
-                  </span>
-                </button>
-              ))}
+            <div className="flex flex-col gap-1.5">
+              {events.length > 0 ? (
+                events.map((event, i) => (
+                  <EventCard key={i} event={event} index={i} task={task} />
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  Run analysis to see events.
+                </span>
+              )}
             </div>
           </div>
         </div>
