@@ -1,24 +1,42 @@
 """
-Minimal FastAPI backend for video upload and metadata extraction
-Receives video files from frontend, saves them, and extracts metadata using OpenCV
+FastAPI backend for video upload, metadata extraction, and video analysis pipeline.
+Receives video files from frontend, saves them, extracts metadata using OpenCV,
+and runs YOLO-based analysis pipelines (detection, tracking, dwell metrics, etc.).
 """
 
+import logging
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from typing import Optional
 import uuid
 import shutil
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 from app.core.decode import extract_metadata
+from app.pipeline.runner import run_pipeline
+from app.pipeline.registry import get_available_tasks
+
+# Configure logging for pipeline visibility
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 class ROISaveBody(BaseModel):
     """Request body for POST /api/video/{video_id}/roi. Polygon in video pixel coordinates."""
     polygon: list[dict]  # [{"x": number, "y": number}, ...]
     name: str | None = None
+
+
+class AnalyzeRequest(BaseModel):
+    """Request body for POST /api/video/{video_id}/analyze."""
+    plan: dict  # The analysis plan (Phase 1: hardcoded, Phase 2: from LLM)
+    # Future: prompt: Optional[str] = None  # Natural language prompt (Phase 2)
 
 # Create FastAPI app instance
 app = FastAPI(title="Video Analytics Backend")
@@ -230,3 +248,91 @@ async def get_roi(video_id: str):
     if video_id not in storage:
         raise HTTPException(status_code=404, detail="ROI not found")
     return storage[video_id]
+
+
+# ─────────────────────────────────────────────────────────────
+# Phase 1: Analysis Pipeline Endpoint
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/video/{video_id}/analyze")
+async def analyze_video(video_id: str, body: AnalyzeRequest):
+    """
+    Run the analysis pipeline on a video.
+
+    Accepts a plan dict specifying which task to run and with what parameters.
+    If the plan requires an ROI (use_roi: true) but no ROI is saved for this video,
+    returns status "needs_roi" instead of running the pipeline.
+
+    Phase 1: Accepts hardcoded plan (no LLM).
+    Phase 2: Will also accept { "prompt": "..." } and use LLM to generate the plan.
+
+    Request body:
+        {
+            "plan": {
+                "task": "dwell_count",
+                "object": "person",
+                "use_roi": true,
+                "params": { "dwell_threshold_seconds": 10 }
+            }
+        }
+
+    Responses:
+        200 with status "ok": Pipeline ran successfully, includes results.
+        200 with status "needs_roi": Plan requires ROI but none exists for this video.
+        404: Video not found.
+        400: Invalid plan (unknown task, etc.).
+    """
+    plan = body.plan
+
+    # Validate video exists
+    video_path = UPLOAD_DIR / f"{video_id}.mp4"
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # Validate task name
+    task_name = plan.get("task")
+    available = get_available_tasks()
+    if not task_name or task_name not in available:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown or missing task '{task_name}'. Available tasks: {available}",
+        )
+
+    # Check if ROI is needed but not available
+    use_roi = plan.get("use_roi", False)
+    roi_polygon = None
+
+    if use_roi:
+        storage = _load_roi_storage()
+        if video_id in storage:
+            roi_polygon = storage[video_id].get("polygon")
+        else:
+            # Plan needs ROI but none exists — return needs_roi status
+            roi_instruction = plan.get("roi_instruction", None)
+            return {
+                "status": "needs_roi",
+                "plan": plan,
+                "roi_instruction": roi_instruction or "Draw a region of interest around the area you want to analyze.",
+                "message": "This analysis needs a region of interest. Draw one on the video, then run again.",
+            }
+
+    # Run the pipeline
+    try:
+        logger.info(f"Starting analysis for video {video_id}, task={task_name}")
+        result = await run_pipeline(
+            video_path=str(video_path),
+            plan=plan,
+            roi_polygon=roi_polygon,
+        )
+
+        return {
+            "status": "ok",
+            "plan": plan,
+            "result": result,
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Pipeline error for video {video_id}")
+        raise HTTPException(status_code=500, detail=f"Pipeline error: {str(e)}")

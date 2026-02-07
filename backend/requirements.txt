@@ -1,6 +1,10 @@
-# Minimal dependencies for video upload backend
+# Video analytics backend dependencies
 fastapi==0.104.1          # Web framework for API endpoints
 uvicorn[standard]==0.24.0 # ASGI server to run FastAPI
 python-multipart==0.0.6   # Required for file upload handling
 opencv-python==4.8.1.78   # Video processing and metadata extraction
 numpy==1.24.3             # Required by OpenCV
+
+# Phase 1: Vision + Pipeline
+ultralytics>=8.3.0        # YOLO detection, tracking (ByteTrack), and pose
+shapely>=2.0.0            # Polygon geometry for ROI point-in-polygon
