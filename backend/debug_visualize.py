@@ -12,6 +12,7 @@ It uses the first video + ROI found in storage. You can also pass a video_id:
     python debug_visualize.py 398c65aa-1b2a-4915-8f4e-67b905fb32b5
 """
 
+import math
 import sys
 import json
 import time
@@ -36,7 +37,7 @@ from app.metrics.dwell import compute_dwell_count, _find_contiguous_runs
 
 
 # ── Configuration ──
-DWELL_THRESHOLD = 0.0  # seconds — set to 0 to see ALL dwell events
+DWELL_THRESHOLD = 5.0  # seconds — min time in ROI to count as dwell (match API: cars ≥ 5s)
 OUTPUT_DIR = Path("debug_output")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -87,12 +88,21 @@ def draw_roi_polygon(frame: np.ndarray, roi_points: list[dict], color=(255, 255,
     cv2.addWeighted(overlay, 0.1, frame, 0.9, 0, frame)
 
 
-def draw_detection(frame: np.ndarray, det: Detection, inside_roi: bool):
-    """Draw a bounding box + track ID on a frame."""
+def draw_detection(frame: np.ndarray, det: Detection, state: str):
+    """Draw a bounding box + track ID on a frame.
+
+    state: "outside" = red (not in ROI), "inside" = yellow (in ROI, not yet dwell qualified),
+           "qualified" = green (in ROI and dwell threshold met).
+    """
     x1, y1, x2, y2 = int(det.bbox.x1), int(det.bbox.y1), int(det.bbox.x2), int(det.bbox.y2)
 
-    # Green if inside ROI, red if outside
-    color = (0, 220, 0) if inside_roi else (0, 0, 220)
+    # Red = outside ROI, Yellow = inside ROI but not dwell qualified, Green = dwell qualified
+    if state == "qualified":
+        color = (0, 220, 0)  # BGR green
+    elif state == "inside":
+        color = (0, 255, 255)  # BGR yellow
+    else:
+        color = (0, 0, 220)   # BGR red (outside)
 
     # Draw box
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
@@ -109,11 +119,11 @@ def draw_detection(frame: np.ndarray, det: Detection, inside_roi: bool):
 
 
 def draw_info_overlay(frame: np.ndarray, frame_idx: int, timestamp: float, fps: float,
-                      n_detections: int, n_inside: int):
+                      n_detections: int, n_inside: int, n_qualified: int = 0):
     """Draw frame info text in the top-left corner."""
     lines = [
         f"Frame: {frame_idx}  |  Time: {timestamp:.2f}s",
-        f"Detections: {n_detections}  |  Inside ROI: {n_inside}",
+        f"Detections: {n_detections}  |  In ROI: {n_inside}  |  Dwell qualified: {n_qualified}",
     ]
     y = 40
     for line in lines:
@@ -181,7 +191,7 @@ def main():
     all_tracks = run_detection_and_tracking(
         video_path=str(video_path),
         model_name="yolo11n.pt",
-        detect_classes=["person"],
+        detect_classes=["car"],
         confidence=0.4,
     )
     vision_time = time.time() - t0
@@ -325,7 +335,7 @@ def main():
     # ══════════════════════════════════════════════════════
     print("\n" + "=" * 70)
     print("  RENDERING ANNOTATED VIDEO")
-    print("  (Drawing boxes, ROI, and color-coding on every frame...)")
+    print("  Red = outside ROI | Yellow = in ROI (not yet dwell) | Green = dwell qualified (>= threshold)")
     print("=" * 70)
 
     # Build frame lookup from ALL tracks (not just filtered) so we can see
@@ -350,6 +360,15 @@ def main():
             for det in track.detections:
                 inside_roi_pairs.add((det.track_id, det.frame_index))
 
+    # Build set of (track_id, frame_index) that are "dwell qualified" (in ROI for >= DWELL_THRESHOLD in this run)
+    threshold_frames = math.ceil(DWELL_THRESHOLD * fps) if fps > 0 else 0
+    dwell_qualified_pairs: set[tuple[int, int]] = set()
+    for e in all_events:
+        first_qualified_frame = e["frame_start"] + threshold_frames
+        if first_qualified_frame <= e["frame_end"]:
+            for fi in range(first_qualified_frame, e["frame_end"] + 1):
+                dwell_qualified_pairs.add((e["track_id"], fi))
+
     # Open video for reading
     cap = cv2.VideoCapture(str(video_path))
     output_path = OUTPUT_DIR / f"annotated_{video_id}.mp4"
@@ -373,15 +392,23 @@ def main():
         # Draw all detections for this frame
         dets_in_frame = frame_lookup_all.get(frame_idx, [])
         n_inside = 0
+        n_qualified = 0
 
         for det in dets_in_frame:
-            det_inside = (det.track_id, det.frame_index) in inside_roi_pairs
-            if det_inside:
+            key = (det.track_id, det.frame_index)
+            if key not in inside_roi_pairs:
+                state = "outside"
+            elif key in dwell_qualified_pairs:
+                state = "qualified"
                 n_inside += 1
-            draw_detection(frame, det, inside_roi=det_inside)
+                n_qualified += 1
+            else:
+                state = "inside"
+                n_inside += 1
+            draw_detection(frame, det, state=state)
 
         # Draw info overlay
-        draw_info_overlay(frame, frame_idx, timestamp, fps, len(dets_in_frame), n_inside)
+        draw_info_overlay(frame, frame_idx, timestamp, fps, len(dets_in_frame), n_inside, n_qualified)
 
         out.write(frame)
         frame_idx += 1
