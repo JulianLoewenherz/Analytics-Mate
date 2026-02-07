@@ -34,11 +34,16 @@ class ObjectAssociation(BaseModel):
 
 
 class VisionConfig(BaseModel):
-    """YOLO vision configuration."""
+    """YOLO vision configuration.
+    
+    Note: detect_classes defaults to None. The pipeline runner will derive it from
+    plan.object when not specified. Set explicitly for multi-class detection
+    (e.g. ["person", "dining table"] for table turnover metrics).
+    """
     model: str = "yolo11n.pt"
     enable_tracking: bool = True
     enable_pose: bool = False
-    detect_classes: list[str] = Field(default_factory=lambda: ["person"])
+    detect_classes: Optional[list[str]] = None
     sample_fps: Optional[float] = None
     confidence_threshold: float = 0.4
 

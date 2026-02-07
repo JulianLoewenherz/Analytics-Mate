@@ -47,20 +47,25 @@ The plan must be valid JSON with these fields:
 3. If the user mentions a zone, area, or region (store, crosswalk, door, etc.), set use_roi: true and provide roi_instruction.
 4. Extract numeric thresholds from the prompt (e.g. "10 seconds" → params.dwell_threshold_seconds: 10).
 5. Include an "explanation" field (string) summarizing your reasoning.
+6. Set vision.detect_classes to match the object(s) the user asked about. For single-object queries (e.g. cars, people), set detect_classes to [object]. For multi-class queries (e.g. person at table, person on phone), set detect_classes to all needed YOLO classes (e.g. ["person", "dining table"]).
 
 ## Examples
 
+Prompt: "How many cars linger in the AOI for more than 5 seconds?"
+Plan:
+{{"task": "dwell_count", "object": "car", "use_roi": true, "vision": {{"detect_classes": ["car"]}}, "params": {{"dwell_threshold_seconds": 5}}, "roi_instruction": "Draw an ROI around the area of interest (AOI).", "explanation": "User wants to count cars lingering in a specified area for more than 5 seconds."}}
+
 Prompt: "How many people loiter in front of my store for more than 10 seconds?"
 Plan:
-{{"task": "dwell_count", "object": "person", "use_roi": true, "params": {{"dwell_threshold_seconds": 10}}, "roi_instruction": "Draw an ROI in front of the store or entrance.", "explanation": "User wants loitering count with 10s threshold in a store-front zone."}}
+{{"task": "dwell_count", "object": "person", "use_roi": true, "vision": {{"detect_classes": ["person"]}}, "params": {{"dwell_threshold_seconds": 10}}, "roi_instruction": "Draw an ROI in front of the store or entrance.", "explanation": "User wants loitering count with 10s threshold in a store-front zone."}}
 
 Prompt: "How long do people wait in the queue?"
 Plan:
-{{"task": "dwell_count", "object": "person", "use_roi": true, "params": {{"dwell_threshold_seconds": 0, "report_per_track": true}}, "roi_instruction": "Draw an ROI around the queue area.", "explanation": "Queue wait time = dwell with 0 threshold, report per track."}}
+{{"task": "dwell_count", "object": "person", "use_roi": true, "vision": {{"detect_classes": ["person"]}}, "params": {{"dwell_threshold_seconds": 0, "report_per_track": true}}, "roi_instruction": "Draw an ROI around the queue area.", "explanation": "Queue wait time = dwell with 0 threshold, report per track."}}
 
 Prompt: "Who stops to look at the display for at least 3 seconds?"
 Plan:
-{{"task": "dwell_count", "object": "person", "use_roi": true, "params": {{"dwell_threshold_seconds": 3}}, "roi_instruction": "Draw an ROI around the display or window.", "explanation": "Display engagement = dwell with 3s threshold."}}
+{{"task": "dwell_count", "object": "person", "use_roi": true, "vision": {{"detect_classes": ["person"]}}, "params": {{"dwell_threshold_seconds": 3}}, "roi_instruction": "Draw an ROI around the display or window.", "explanation": "Display engagement = dwell with 3s threshold."}}
 """
 
 

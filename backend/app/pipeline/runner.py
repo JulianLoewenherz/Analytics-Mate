@@ -61,7 +61,7 @@ async def run_pipeline(
     # Ensure .pt extension
     if not model_name.endswith(".pt"):
         model_name = f"{model_name}.pt"
-    detect_classes = vision_config.get("detect_classes", [plan.get("object", "person")])
+    detect_classes = vision_config.get("detect_classes") or [plan.get("object", "person")]
     confidence = vision_config.get("confidence_threshold", 0.4)
     sample_fps = vision_config.get("sample_fps", None)
 

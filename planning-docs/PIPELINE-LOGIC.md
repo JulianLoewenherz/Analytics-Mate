@@ -129,7 +129,10 @@ This is the **complete schema** that the LLM is allowed to produce. Every field 
 ### Why this shape?
 
 - **`task`** picks the metric module. One task = one well-defined computation.
-- **`object`** tells the vision layer what to detect (maps to YOLO class names).
+- **`object`** specifies the primary entity the metric measures (e.g. person dwell time, car count). This is what you're counting or computing metrics about.
+- **`vision.detect_classes`** specifies which YOLO classes to actually detect. Can be a superset of `object` when you need secondary objects for context (e.g. detect both "person" and "dining table" to compute person-at-table metrics).
+  - **Single-class queries:** `object` and `detect_classes` match (e.g. `object: "car"`, `detect_classes: ["car"]`)
+  - **Multi-class queries:** `detect_classes` includes additional objects needed for association (e.g. `object: "person"`, `detect_classes: ["person", "cell phone"]` to compute phone-use time)
 - **`use_roi`** determines if the saved user-drawn polygon is loaded and applied.
 - **`vision`** configures the YOLO pass (model size, pose, which classes, sampling rate).
 - **`filters`** is the "narrowing" layer — spatial (ROI), appearance (color), object co-occurrence (phone near person, person at table), and track quality (min frames, confidence).
@@ -146,7 +149,7 @@ This is the **complete schema** that the LLM is allowed to produce. Every field 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `task` | string | Yes | Which metric module to run. Must be a registered task name (see Section 8). |
-| `object` | string | Yes | Primary object to detect. Maps to YOLO class (e.g. `"person"`, `"car"`, `"bicycle"`). |
+| `object` | string | Yes | Primary entity the metric measures. Maps to YOLO class (e.g. `"person"`, `"car"`, `"bicycle"`). For multi-class queries, this is the main subject while `vision.detect_classes` may include additional classes. |
 | `use_roi` | boolean | Yes | Whether to use the user-drawn ROI polygon as a spatial filter. |
 | `roi_instruction` | string | No | Short hint for the user on *where* to draw the ROI when none exists (e.g. "Draw an ROI on the crosswalk"). Used by the UI when returning `needs_roi`. |
 
@@ -231,24 +234,28 @@ Each task defines its own params. See Section 8 for every task's param spec.
 
 ---
 
-### 4.2 — "How many people get on the bus?"
+### 4.2 — "How much time do people spend on their phone?" (Multi-class detection)
 
 ```json
 {
-  "task": "traffic_count",
+  "task": "object_co_occurrence_dwell",
   "object": "person",
-  "use_roi": true,
+  "use_roi": false,
   "vision": {
     "model": "yolo26n",
     "enable_tracking": true,
-    "detect_classes": ["person"]
+    "detect_classes": ["person", "cell phone"]
   },
   "filters": {
-    "roi_mode": "enters",
-    "min_track_frames": 3
+    "object_association": {
+      "associate_with": "cell phone",
+      "method": "proximity",
+      "max_distance_px": 100
+    },
+    "min_track_frames": 10
   },
   "params": {
-    "count_mode": "unique_entries"
+    "association_threshold_seconds": 0.5
   },
   "output": {
     "include_events": true,
@@ -257,7 +264,9 @@ Each task defines its own params. See Section 8 for every task's param spec.
 }
 ```
 
-**Pipeline:** Decode → YOLO track persons → for each track, detect frame where center transitions from outside ROI to inside ROI → count unique track IDs that "enter" → emit entry events with timestamps.
+**Pipeline:** Decode → YOLO detects both persons (tracked) and cell phones (detections) → for each person track, find frames where a cell phone detection is within 100px → compute contiguous time with phone association → emit per-person phone usage duration.
+
+**Note:** This demonstrates multi-class detection where `object: "person"` (what we measure) but `detect_classes: ["person", "cell phone"]` (what YOLO must see to compute the association).
 
 ---
 
