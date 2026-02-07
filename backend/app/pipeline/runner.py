@@ -6,20 +6,26 @@ Pipeline steps:
   2. Vision:  Run YOLO detection + tracking → list[Track]
   3. Filter:  Apply ROI filter + quality filters → filtered tracks
   4. Metric:  Run the selected task function → events + aggregates
-  5. Format:  Attach metadata and return
+  5. Visualize: Run task-specific visualizer → annotated video (when registered)
+  6. Format:  Attach metadata and return
 
 Spec: PIPELINE-LOGIC.md Section 7.1.
 """
 
 import logging
 import time
+from pathlib import Path
 
 from app.core.decode import extract_metadata
 from app.vision.detector import run_detection_and_tracking
 from app.pipeline.filters import apply_filters
 from app.pipeline.registry import TASK_REGISTRY
+from app.visualizers.registry import get_visualizer
 
 logger = logging.getLogger(__name__)
+
+# Annotated videos written here (backend/annotated_cache/)
+ANNOTATED_CACHE = Path(__file__).resolve().parent.parent.parent / "annotated_cache"
 
 
 async def run_pipeline(
@@ -110,6 +116,30 @@ async def run_pipeline(
         fps=fps,
         video_duration=video_duration,
     )
+
+    # ── Step 5: Visualize (same run as metric) ──
+    video_id = Path(video_path).stem
+    vis_fn = get_visualizer(task_name)
+    if vis_fn:
+        try:
+            out_path = vis_fn(
+                all_tracks=tracks,
+                filtered_tracks=filtered_tracks,
+                roi_polygon=roi_polygon if use_roi else None,
+                params=params,
+                events=result.get("events", []),
+                video_path=video_path,
+                video_id=video_id,
+                fps=fps,
+                width=video_meta["width"],
+                height=video_meta["height"],
+                frame_count=video_meta["frame_count"],
+                output_dir=ANNOTATED_CACHE,
+            )
+            if out_path and out_path.exists():
+                result["annotated_video_url"] = f"/api/video/{video_id}/annotated"
+        except Exception as e:
+            logger.warning(f"Visualizer failed for {task_name}: {e}")
 
     # ── Attach metadata ──
     processing_time = round(time.time() - start_time, 2)

@@ -127,7 +127,11 @@ export function Workspace() {
 
           {/* Center — Evidence */}
           <ResizablePanel defaultSize={50} minSize={30}>
-            <EvidencePane videoId={videoId} onVideoIdChange={setVideoId} />
+            <EvidencePane
+              videoId={videoId}
+              onVideoIdChange={setVideoId}
+              runResult={runResponse?.status === "ok" ? runResponse.result : undefined}
+            />
           </ResizablePanel>
 
           <ResizableHandle />

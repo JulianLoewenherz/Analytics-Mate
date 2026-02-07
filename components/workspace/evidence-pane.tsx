@@ -5,14 +5,18 @@ import { Upload, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ROICanvas, type Point } from "./roi-canvas";
 
 interface EvidencePaneProps {
   videoId: string | null;
   onVideoIdChange: (videoId: string | null) => void;
+  runResult?: Record<string, unknown> | null;
 }
 
-export function EvidencePane({ videoId, onVideoIdChange }: EvidencePaneProps) {
+const BACKEND_URL = "http://localhost:8000";
+
+export function EvidencePane({ videoId, onVideoIdChange, runResult }: EvidencePaneProps) {
   const [hasVideo, setHasVideo] = useState(false);
   const [videoMetadata, setVideoMetadata] = useState<{
     fps: number;
@@ -29,6 +33,9 @@ export function EvidencePane({ videoId, onVideoIdChange }: EvidencePaneProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const annotatedVideoRef = useRef<HTMLVideoElement>(null);
+
+  const annotatedVideoUrl = runResult?.annotated_video_url as string | undefined;
 
   // Handle file selection
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -216,54 +223,93 @@ export function EvidencePane({ videoId, onVideoIdChange }: EvidencePaneProps) {
 
       <Separator />
 
-      {/* Video area */}
-      <div className="relative flex-1 m-3 rounded-lg border border-border bg-card overflow-hidden">
+      {/* Tabs + Video area */}
+      <div className="relative flex flex-1 flex-col m-3 rounded-lg border border-border bg-card overflow-hidden">
         {hasVideo ? (
           <>
-            {/* Video player - loads video from backend */}
-            <div className="absolute inset-0 bg-black flex items-center justify-center">
-              {videoId ? (
-                <>
-                  <video
-                    ref={videoRef}
-                    crossOrigin="anonymous"
-                    src={`http://localhost:8000/api/video/${videoId}`}
-                    className="w-full h-full object-contain"
-                    controls={true}
-                    aria-label="Uploaded video"
-                    onLoadedMetadata={() => {
-                      const v = videoRef.current;
-                      if (v?.videoWidth && v?.videoHeight) {
-                        setVideoDimensions({ w: v.videoWidth, h: v.videoHeight });
-                      }
-                    }}
-                  />
-                  {/* Step 4: Saved ROI overlay (state only) — SVG matches video aspect ratio */}
-                  {savedROI && savedROI.length >= 3 && !showROICanvas && videoDimensions && (
-                    <svg
-                      className="absolute inset-0 w-full h-full pointer-events-none"
-                      viewBox={`0 0 ${videoDimensions.w} ${videoDimensions.h}`}
-                      preserveAspectRatio="xMidYMid meet"
-                    >
-                      <polygon
-                        points={savedROI.map((p) => `${p.x},${p.y}`).join(" ")}
-                        fill="rgba(34, 197, 94, 0.35)"
-                        stroke="rgb(34, 197, 94)"
-                        strokeWidth={2}
+            {/* Tabs: Video (ROI only) | Visualized (annotated) */}
+            <Tabs defaultValue="video" className="flex flex-1 flex-col min-h-0">
+              <div className="flex items-center justify-between px-3 pt-2">
+                <TabsList className="h-8">
+                  <TabsTrigger value="video" className="text-xs px-2.5">
+                    Video
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="visualized"
+                    className="text-xs px-2.5"
+                    disabled={!annotatedVideoUrl}
+                  >
+                    Visualized
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              {/* Video tab — normal video with ROI overlay */}
+              <TabsContent value="video" className="flex-1 m-0 min-h-0 data-[state=inactive]:hidden">
+                <div className="relative w-full h-full min-h-[200px] bg-black flex items-center justify-center">
+                  {videoId ? (
+                    <>
+                      <video
+                        ref={videoRef}
+                        crossOrigin="anonymous"
+                        src={`${BACKEND_URL}/api/video/${videoId}`}
+                        className="w-full h-full object-contain"
+                        controls={true}
+                        aria-label="Uploaded video"
+                        onLoadedMetadata={() => {
+                          const v = videoRef.current;
+                          if (v?.videoWidth && v?.videoHeight) {
+                            setVideoDimensions({ w: v.videoWidth, h: v.videoHeight });
+                          }
+                        }}
                       />
-                    </svg>
+                      {savedROI && savedROI.length >= 3 && !showROICanvas && videoDimensions && (
+                        <svg
+                          className="absolute inset-0 w-full h-full pointer-events-none"
+                          viewBox={`0 0 ${videoDimensions.w} ${videoDimensions.h}`}
+                          preserveAspectRatio="xMidYMid meet"
+                        >
+                          <polygon
+                            points={savedROI.map((p) => `${p.x},${p.y}`).join(" ")}
+                            fill="rgba(34, 197, 94, 0.35)"
+                            stroke="rgb(34, 197, 94)"
+                            strokeWidth={2}
+                          />
+                        </svg>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted-foreground/40 font-mono">
+                      LOADING VIDEO...
+                    </span>
                   )}
-                </>
-              ) : (
-                <span className="text-xs text-muted-foreground/40 font-mono">
-                  LOADING VIDEO...
-                </span>
-              )}
-            </div>
+                </div>
+              </TabsContent>
+
+              {/* Visualized tab — annotated video with bboxes, ROI, color-coding */}
+              <TabsContent value="visualized" className="flex-1 m-0 min-h-0 data-[state=inactive]:hidden">
+                <div className="relative w-full h-full min-h-[200px] bg-black flex items-center justify-center">
+                  {annotatedVideoUrl ? (
+                    <video
+                      ref={annotatedVideoRef}
+                      crossOrigin="anonymous"
+                      src={`${BACKEND_URL}${annotatedVideoUrl}`}
+                      className="w-full h-full object-contain"
+                      controls={true}
+                      aria-label="Annotated video with bounding boxes"
+                    />
+                  ) : (
+                    <span className="text-xs text-muted-foreground/60 font-mono text-center px-4">
+                      Run analysis to see the visualized version
+                    </span>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
 
             {/* Video metadata overlay */}
             {videoMetadata && !showROICanvas && (
-              <div className="absolute left-3 top-3 flex items-center gap-2">
+              <div className="absolute left-6 top-14 flex items-center gap-2 pointer-events-none">
                 <Badge className="bg-card/80 text-foreground border-none text-[10px] font-mono backdrop-blur-sm">
                   {videoMetadata.fps} fps • {videoMetadata.frameCount} frames • {Math.round(videoMetadata.duration)}s
                 </Badge>
@@ -271,7 +317,7 @@ export function EvidencePane({ videoId, onVideoIdChange }: EvidencePaneProps) {
             )}
             {/* Draw ROI button — when video loaded and not in drawing mode */}
             {!showROICanvas && (
-              <div className="absolute right-3 top-3">
+              <div className="absolute right-6 top-14">
                 <Button
                   type="button"
                   variant="secondary"

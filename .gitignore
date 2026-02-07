@@ -11,6 +11,9 @@ backend/uploads/
 # Debug / generated artifacts (recreate with: python debug_visualize.py)
 backend/debug_output/
 
+# Annotated videos (generated on pipeline run)
+backend/annotated_cache/
+
 # YOLO model (auto-downloaded on first run by ultralytics)
 backend/*.pt
 
