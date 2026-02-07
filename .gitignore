@@ -8,6 +8,12 @@ env/
 # Video uploads
 backend/uploads/
 
+# Debug / generated artifacts (recreate with: python debug_visualize.py)
+backend/debug_output/
+
+# YOLO model (auto-downloaded on first run by ultralytics)
+backend/*.pt
+
 # IDE
 .vscode/
 .idea/
