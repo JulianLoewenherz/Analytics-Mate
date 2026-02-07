@@ -164,6 +164,15 @@ export function EvidencePane({ videoId, onVideoIdChange }: EvidencePaneProps) {
     };
   }, [videoId]);
 
+  // Listen for open-draw-roi event (e.g. from needs_roi popup "Draw ROI" button)
+  useEffect(() => {
+    const handler = () => {
+      handleDrawROIClick();
+    };
+    window.addEventListener("open-draw-roi", handler);
+    return () => window.removeEventListener("open-draw-roi", handler);
+  }, [handleDrawROIClick]);
+
   // Load saved ROI when video is set (e.g. after upload or page load with same video)
   useEffect(() => {
     if (!videoId) return;

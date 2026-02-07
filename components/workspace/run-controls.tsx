@@ -12,30 +12,30 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
-type RunStatus = "idle" | "running" | "done";
+interface RunControlsProps {
+  videoId: string | null;
+  onRun: () => void;
+  isRunning: boolean;
+  runComplete?: boolean;
+}
 
-export function RunControls() {
-  const [status, setStatus] = useState<RunStatus>("idle");
+export function RunControls({ videoId, onRun, isRunning, runComplete }: RunControlsProps) {
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState("");
 
   const handleRun = () => {
-    // TODO: Wire up to backend — trigger full analysis pipeline
-    setStatus("running");
-    setCurrentStep("Detecting objects...");
+    setCurrentStep("Running analysis...");
     setProgress(35);
+    onRun();
   };
 
   const handleStep = () => {
     // TODO: Wire up to backend — advance one pipeline step (detect -> track -> metric)
-    setStatus("running");
     setCurrentStep("Stepping: detect");
     setProgress(25);
   };
 
   const handleRerun = () => {
-    // TODO: Wire up to backend — re-run analysis with current parameter changes
-    setStatus("idle");
     setProgress(0);
     setCurrentStep("");
   };
@@ -46,10 +46,10 @@ export function RunControls() {
       <Button
         size="sm"
         onClick={handleRun}
-        disabled={status === "running"}
+        disabled={!videoId || isRunning}
         className="gap-1.5"
       >
-        {status === "running" ? (
+        {isRunning ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
         ) : (
           <Play className="h-3.5 w-3.5" />
@@ -62,7 +62,7 @@ export function RunControls() {
         variant="outline"
         size="sm"
         onClick={handleStep}
-        disabled={status === "running"}
+        disabled={isRunning}
         className="gap-1.5 bg-transparent"
       >
         <StepForward className="h-3.5 w-3.5" />
@@ -91,7 +91,7 @@ export function RunControls() {
 
       {/* Progress area */}
       <div className="flex flex-1 items-center gap-3 justify-end">
-        {status === "running" && (
+        {isRunning && (
           <>
             <span className="text-[11px] text-muted-foreground font-mono truncate max-w-[200px]">
               {currentStep}
@@ -99,7 +99,7 @@ export function RunControls() {
             <Progress value={progress} className="w-32 h-1.5" />
           </>
         )}
-        {status === "done" && (
+        {runComplete && (
           <Badge variant="secondary" className="text-[10px]">
             Completed
           </Badge>

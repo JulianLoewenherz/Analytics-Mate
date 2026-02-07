@@ -11,6 +11,7 @@ import {
   BarChart3,
   Target,
   Video,
+  FileJson,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,10 +25,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const EXAMPLE_QUESTIONS = [
+  "How many people dwell in the ROI zone for 5 seconds or more?",
   "How many people are bicycling?",
-  "How many dogs are in this park?",
   "How many people cross per walk signal on average?",
   "What is the average dwell time at the entrance?",
 ];
@@ -74,10 +76,12 @@ const MOCK_PLAN: PlanStep[] = [
 interface IntentPaneProps {
   videoId: string | null;
   onVideoSelect: (videoId: string | null) => void;
+  query: string;
+  onQueryChange: (q: string) => void;
+  plan: Record<string, unknown> | null;
 }
 
-export function IntentPane({ videoId, onVideoSelect }: IntentPaneProps) {
-  const [query, setQuery] = useState("");
+export function IntentPane({ videoId, onVideoSelect, query, onQueryChange, plan }: IntentPaneProps) {
   const [previousVideos, setPreviousVideos] = useState<{ video_id: string }[]>([]);
   const [planExpanded, setPlanExpanded] = useState(true);
   const [paramsExpanded, setParamsExpanded] = useState(true);
@@ -85,7 +89,7 @@ export function IntentPane({ videoId, onVideoSelect }: IntentPaneProps) {
   const [timeWindow, setTimeWindow] = useState([30]);
 
   const handleExampleClick = (q: string) => {
-    setQuery(q);
+    onQueryChange(q);
   };
 
   // Fetch list of previously uploaded videos on mount
@@ -153,45 +157,73 @@ export function IntentPane({ videoId, onVideoSelect }: IntentPaneProps) {
 
           <Separator />
 
-          {/* Prompt box */}
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor="query-input"
-              className="text-xs font-medium text-muted-foreground uppercase tracking-wider"
-            >
-              Ask a question
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <textarea
-                id="query-input"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="e.g. How many people are bicycling?"
-                className="w-full resize-none rounded-md border border-input bg-background py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring min-h-[72px]"
-                rows={2}
-              />
-            </div>
-          </div>
-
-          {/* Example questions */}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Examples
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {EXAMPLE_QUESTIONS.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => handleExampleClick(q)}
-                  className="rounded-md border border-border bg-secondary px-2.5 py-1 text-xs text-secondary-foreground hover:bg-secondary/80 transition-colors text-left"
+          {/* Prompt | Plan toggle */}
+          <Tabs defaultValue="prompt" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 h-8">
+              <TabsTrigger value="prompt" className="gap-1.5 text-xs">
+                <Search className="h-3.5 w-3.5" />
+                Prompt
+              </TabsTrigger>
+              <TabsTrigger value="plan" className="gap-1.5 text-xs">
+                <FileJson className="h-3.5 w-3.5" />
+                Plan (JSON)
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="prompt" className="flex flex-col gap-2 mt-2">
+              {/* Prompt box */}
+              <div className="flex flex-col gap-2">
+                <label
+                  htmlFor="query-input"
+                  className="text-xs font-medium text-muted-foreground uppercase tracking-wider"
                 >
-                  {q}
-                </button>
-              ))}
-            </div>
-          </div>
+                  Ask a question
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <textarea
+                    id="query-input"
+                    value={query}
+                    onChange={(e) => onQueryChange(e.target.value)}
+                    placeholder="e.g. How many people dwell in the ROI zone for 5 seconds?"
+                    className="w-full resize-none rounded-md border border-input bg-background py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring min-h-[72px]"
+                    rows={2}
+                  />
+                </div>
+              </div>
+
+              {/* Example questions */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                  Examples
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {EXAMPLE_QUESTIONS.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => handleExampleClick(q)}
+                      className="rounded-md border border-border bg-secondary px-2.5 py-1 text-xs text-secondary-foreground hover:bg-secondary/80 transition-colors text-left"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </TabsContent>
+            <TabsContent value="plan" className="mt-2">
+              <div className="rounded-md border border-border bg-background p-3 min-h-[120px]">
+                {plan ? (
+                  <pre className="text-[11px] font-mono text-foreground overflow-auto max-h-[240px] whitespace-pre-wrap break-words">
+                    {JSON.stringify(plan, null, 2)}
+                  </pre>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    Run analysis to see the generated plan here.
+                  </span>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
 
           <Separator />
 

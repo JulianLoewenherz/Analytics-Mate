@@ -1,51 +1,28 @@
 "use client";
 
-import React from "react"
+import React from "react";
 
-import {
-  Users,
-  Bike,
-  Dog,
-  Clock,
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
-interface Metric {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  change?: { value: string; direction: "up" | "down" };
+function formatAggregateLabel(key: string): string {
+  return key
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
 }
 
-const MOCK_METRICS: Metric[] = [
-  {
-    label: "People detected",
-    value: "142",
-    icon: <Users className="h-4 w-4" />,
-    change: { value: "+12", direction: "up" },
-  },
-  {
-    label: "Bicycles",
-    value: "23",
-    icon: <Bike className="h-4 w-4" />,
-    change: { value: "+3", direction: "up" },
-  },
-  {
-    label: "Dogs",
-    value: "8",
-    icon: <Dog className="h-4 w-4" />,
-  },
-  {
-    label: "Avg dwell time",
-    value: "34s",
-    icon: <Clock className="h-4 w-4" />,
-    change: { value: "-5s", direction: "down" },
-  },
-];
+function formatAggregateValue(value: unknown): string {
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  }
+  return String(value);
+}
+
+interface ResultsPaneProps {
+  result?: { aggregates?: Record<string, unknown> } | null;
+}
 
 interface Event {
   id: string;
@@ -127,7 +104,10 @@ function getEventBadgeVariant(type: string) {
   }
 }
 
-export function ResultsPane() {
+export function ResultsPane({ result }: ResultsPaneProps) {
+  const aggregates = result?.aggregates ?? {};
+  const aggregateEntries = Object.entries(aggregates);
+
   return (
     <div className="flex h-full flex-col bg-card">
       {/* Header */}
@@ -145,67 +125,31 @@ export function ResultsPane() {
 
       <ScrollArea className="flex-1">
         <div className="p-4 flex flex-col gap-4">
-          {/* Headline metrics */}
+          {/* Headline metrics — one card per aggregate from the task */}
           <div className="flex flex-col gap-2">
             <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
               Headline Metrics
             </span>
             <div className="grid grid-cols-2 gap-2">
-              {MOCK_METRICS.map((metric) => (
-                <div
-                  key={metric.label}
-                  className="flex flex-col gap-1.5 rounded-md border border-border bg-background p-3"
-                >
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    {metric.icon}
-                    <span className="text-[11px]">{metric.label}</span>
-                  </div>
-                  <div className="flex items-end justify-between">
-                    <span className="text-xl font-bold font-mono text-foreground">
-                      {metric.value}
+              {aggregateEntries.length > 0 ? (
+                aggregateEntries.map(([key, value]) => (
+                  <div
+                    key={key}
+                    className="flex flex-col gap-1.5 rounded-md border border-border bg-background p-3"
+                  >
+                    <span className="text-[11px] text-muted-foreground">
+                      {formatAggregateLabel(key)}
                     </span>
-                    {metric.change && (
-                      <span
-                        className={`flex items-center gap-0.5 text-[11px] font-medium ${
-                          metric.change.direction === "up"
-                            ? "text-primary"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {metric.change.direction === "up" ? (
-                          <ArrowUpRight className="h-3 w-3" />
-                        ) : (
-                          <ArrowDownRight className="h-3 w-3" />
-                        )}
-                        {metric.change.value}
-                      </span>
-                    )}
+                    <span className="text-xl font-bold font-mono text-foreground">
+                      {formatAggregateValue(value)}
+                    </span>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Per-signal summary */}
-          <div className="rounded-md border border-border bg-background p-3 flex flex-col gap-2">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Per Signal Average
-            </span>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-foreground">
-                Crossings per walk signal
-              </span>
-              <span className="text-sm font-bold font-mono text-foreground">
-                10.0
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-foreground">
-                Signal cycles recorded
-              </span>
-              <span className="text-sm font-bold font-mono text-foreground">
-                2
-              </span>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground col-span-2">
+                  Run analysis to see metrics.
+                </span>
+              )}
             </div>
           </div>
 

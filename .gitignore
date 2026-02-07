@@ -25,3 +25,5 @@ backend/*.pt
 node_modules/
 .next/
 out/
+
+.env
