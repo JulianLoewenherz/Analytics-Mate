@@ -1,21 +1,61 @@
 # Analytics Mate
 
-**Cursor for video analytics** — an AI-assisted workspace where you ask questions about video in plain language and iteratively build, inspect, and refine the logic that answers them, backed by visual evidence.
+An AI-assisted workspace for **asking questions about video** in plain English and getting **traceable evidence** back (events, timestamps, annotated video) — not a black-box dashboard.
 
-Not “upload video → black box → charts.” Instead: **ask → see the plan → run step-by-step → edit parameters → re-run** and trace every result back to the video.
+At a glance: **Intent → Plan (JSON) → Run → Evidence → Iterate**.
 
-### MVP in one sentence
+## What it can do
 
-Upload a video, ask something like *“How many people dwell outside my store?”, “How many people are bicycling?”, “How many dogs are in this park?”, or “How many people cross per walk signal on average?”*, get an **editable analysis plan** (e.g. objects of interest, ROI, time windows, thresholds), draw your region of interest, run the pipeline, and see annotated video + event list + counts—then tweak and re-run.
+- **Dwell / loitering (timing)**: “How many people loiter for 5+ seconds?”, “Average wait time in the queue?”
+- **Traffic / counting (transitions)**: “How many people enter / exit?”, “How many people cross the crosswalk?”
+- **Whole-video queries (no ROI)**: “How many people appear in this video?”, “Count all cars”
+- **Appearance filtering (color)**: “How many people have a green shirt?”, “blue jeans” (HSV-based color filter on track crops)
+- **Object flexibility**: works across **80 COCO classes** supported by YOLO (person, car, bus, dog, …)
 
-### Tech (MVP)
+## How it works
 
-- **Backend:** Python, YOLOv8/YOLOv11 (object + person detection), ByteTrack (tracking), OpenCV, NumPy  
-- **Frontend:** Streamlit (fastest path) or Next.js + FastAPI  
-- **AI:** LLM outputs a **structured plan (JSON)** only; no arbitrary code execution. Plan maps to fixed metric modules (e.g. `dwell_count`, `traffic_count`).
+1. **LLM planner** converts your prompt into a **schema-validated JSON plan** (no code execution).
+2. **Vision** runs YOLO detection + ByteTrack-style tracking to produce per-object tracks.
+3. **Filters** apply ROI / quality / appearance constraints.
+4. **Metrics** compute results (`dwell_count`, `traffic_count`) and emit **events + aggregates**.
+5. **Visualizer** renders an annotated MP4 (red/yellow/green state overlays).
 
-### Core loop
+## Quickstart (local)
 
-**Intent** (natural language) → **Plan** (editable, human-readable steps) → **Evidence** (boxes, tracks, events, timeline) → **Tweak** (sliders, ROI, filters) → **Re-run**.
+### Backend (FastAPI)
 
-See **[PLANNING.md](./PLANNING.md)** for the full MVP feature list, tech stack, logic structure, build order, and plan format.
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# set env var (recommended) or copy .env.example -> .env
+export OPENAI_API_KEY="..."
+
+uvicorn app.main:app --reload
+```
+
+### Frontend (Next.js)
+
+```bash
+npm install
+npm run dev
+```
+
+Open the app, upload a video, optionally draw an ROI, ask a question, and run.
+
+## Example prompts
+
+- “How many people loiter at the entrance for 5+ seconds?”
+- “How many people cross the crosswalk?”
+- “Count all cars in the video”
+- “How many people have a green shirt?”
+- “How many people are wearing blue jeans?”
+
+## Safety / design notes
+
+- The LLM only produces a **structured JSON plan**; execution is limited to **registered metric modules**.
+- Keep secrets out of the repo. `.env` is ignored — use `.env.example` as a template.
+
+See [`PLANNING.md`](./PLANNING.md) for deeper architecture notes and roadmap.
