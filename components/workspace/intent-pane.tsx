@@ -40,37 +40,32 @@ interface PlanStep {
   label: string;
   description: string;
   icon: React.ReactNode;
-  status: "pending" | "active" | "done";
 }
 
 const MOCK_PLAN: PlanStep[] = [
   {
-    id: "detect",
-    label: "Detect objects",
-    description: "Identify people, bikes, and dogs in each frame",
-    icon: <Eye className="h-3.5 w-3.5" />,
-    status: "done",
+    id: "ingest",
+    label: "Ingest video",
+    description: "Your video is uploaded, stored, and prepared for frame-by-frame analysis.",
+    icon: <Video className="h-3.5 w-3.5" />,
   },
   {
-    id: "track",
-    label: "Track across frames",
-    description: "Assign persistent IDs and build motion trajectories",
+    id: "detect_track",
+    label: "Detect + track objects",
+    description: "The system detects people and other objects in each frame and links them over time into trajectories.",
     icon: <GitBranch className="h-3.5 w-3.5" />,
-    status: "active",
   },
   {
-    id: "count",
-    label: "Count entries into ROI",
-    description: "Tally objects entering the defined region of interest",
+    id: "measure",
+    label: "Measure events",
+    description: "High-level events are computed from those trajectories, such as entries, exits, dwell time, and crossings.",
     icon: <Target className="h-3.5 w-3.5" />,
-    status: "pending",
   },
   {
     id: "aggregate",
-    label: "Aggregate by signal",
-    description: "Group counts per walk signal cycle and compute averages",
+    label: "Aggregate results",
+    description: "Those events are aggregated into metrics and visual summaries that power the charts and overlays you see.",
     icon: <BarChart3 className="h-3.5 w-3.5" />,
-    status: "pending",
   },
 ];
 
@@ -84,10 +79,6 @@ interface IntentPaneProps {
 
 export function IntentPane({ videoId, onVideoSelect, query, onQueryChange, plan }: IntentPaneProps) {
   const [previousVideos, setPreviousVideos] = useState<{ video_id: string }[]>([]);
-  const [planExpanded, setPlanExpanded] = useState(true);
-  const [paramsExpanded, setParamsExpanded] = useState(true);
-  const [confidenceThreshold, setConfidenceThreshold] = useState([50]);
-  const [timeWindow, setTimeWindow] = useState([30]);
 
   const handleExampleClick = (q: string) => {
     onQueryChange(q);
@@ -228,152 +219,50 @@ export function IntentPane({ videoId, onVideoSelect, query, onQueryChange, plan 
 
           <Separator />
 
-          {/* Analysis Plan */}
+          {/* How the system works */}
           <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => setPlanExpanded(!planExpanded)}
-              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-            >
-              {planExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-              Analysis Plan
-            </button>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                How the system works
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                A high-level overview of the steps the system takes to turn raw video into the metrics and visuals shown in the results pane.
+              </span>
+            </div>
 
-            {planExpanded && (
-              <div className="flex flex-col gap-1">
-                {MOCK_PLAN.map((step, index) => (
-                  <div
-                    key={step.id}
-                    className="flex items-start gap-2.5 rounded-md border border-border bg-background p-2.5"
-                  >
-                    {/* Step number + connector */}
-                    <div className="flex flex-col items-center gap-1">
-                      <div
-                        className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${
-                          step.status === "done"
-                            ? "bg-primary text-primary-foreground"
-                            : step.status === "active"
-                              ? "border-2 border-primary text-primary"
-                              : "border border-border text-muted-foreground"
-                        }`}
-                      >
-                        {index + 1}
-                      </div>
-                      {index < MOCK_PLAN.length - 1 && (
-                        <div className="h-4 w-px bg-border" />
-                      )}
+            <div className="flex flex-col gap-1">
+              {MOCK_PLAN.map((step, index) => (
+                <div
+                  key={step.id}
+                  className="flex items-start gap-2.5 rounded-md border border-border bg-background p-2.5"
+                >
+                  {/* Step number + connector */}
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold bg-primary text-primary-foreground">
+                      {index + 1}
                     </div>
+                    {index < MOCK_PLAN.length - 1 && (
+                      <div className="h-4 w-px bg-border" />
+                    )}
+                  </div>
 
-                    {/* Content */}
-                    <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`text-xs font-medium ${step.status === "done" ? "text-primary" : "text-foreground"}`}
-                        >
-                          {step.label}
-                        </span>
-                        {step.icon}
-                      </div>
-                      <span className="text-[11px] text-muted-foreground leading-relaxed">
-                        {step.description}
+                  {/* Content */}
+                  <div className="flex flex-1 flex-col gap-0.5 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-foreground">
+                        {step.label}
                       </span>
+                      {step.icon}
                     </div>
-
-                    {/* Edit button */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0"
-                      aria-label={`Edit step: ${step.label}`}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
+                    <span className="text-[11px] text-muted-foreground leading-relaxed">
+                      {step.description}
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
           </div>
 
-          <Separator />
-
-          {/* Parameters */}
-          <div className="flex flex-col gap-3">
-            <button
-              type="button"
-              onClick={() => setParamsExpanded(!paramsExpanded)}
-              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-            >
-              {paramsExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-              Parameters
-            </button>
-
-            {paramsExpanded && (
-              <div className="flex flex-col gap-4">
-                {/* Confidence threshold */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs text-muted-foreground">
-                      Confidence threshold
-                    </label>
-                    <span className="text-xs font-mono text-foreground">
-                      {confidenceThreshold[0]}%
-                    </span>
-                  </div>
-                  <Slider
-                    value={confidenceThreshold}
-                    onValueChange={setConfidenceThreshold}
-                    min={0}
-                    max={100}
-                    step={5}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Time window */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs text-muted-foreground">
-                      Time window (seconds)
-                    </label>
-                    <span className="text-xs font-mono text-foreground">
-                      {timeWindow[0]}s
-                    </span>
-                  </div>
-                  <Slider
-                    value={timeWindow}
-                    onValueChange={setTimeWindow}
-                    min={5}
-                    max={120}
-                    step={5}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* ROI indicator */}
-                <div className="flex items-center justify-between rounded-md border border-border bg-background p-2.5">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-foreground font-medium">
-                      Region of Interest
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      Draw on the video to define
-                    </span>
-                  </div>
-                  <Badge variant="secondary" className="text-[10px]">
-                    Not set
-                  </Badge>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </ScrollArea>
     </div>
