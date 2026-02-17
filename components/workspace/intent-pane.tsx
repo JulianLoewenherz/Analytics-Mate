@@ -28,11 +28,15 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const EXAMPLE_QUESTIONS = [
-  "How many people dwell in the ROI zone for 5 seconds or more?",
+  // Whole-video — no ROI needed
+  "Count all cars in the video",
+  // Appearance / color filtering — no ROI needed
+  "How many people have a green shirt?",
+  // ROI-based dwell
+  "How many people loiter at the entrance for 5+ seconds?",
+  // ROI-based traffic
   "How many people cross the crosswalk?",
   "How many people enter the store?",
-  "How many people exit the store?",
-  "What is the average dwell time at the entrance?",
 ];
 
 interface PlanStep {

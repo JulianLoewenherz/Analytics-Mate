@@ -70,6 +70,7 @@ async def run_pipeline(
     roi_mode = filter_config.get("roi_mode", "inside")
     min_track_frames = filter_config.get("min_track_frames", 5)
     min_confidence = filter_config.get("min_confidence", 0.4)
+    appearance = filter_config.get("appearance")  # Optional AppearanceFilter dict
 
     # Validate task exists
     if task_name not in TASK_REGISTRY:
@@ -95,7 +96,11 @@ async def run_pipeline(
     tracks_found = len(tracks)
 
     # ── Step 3: Filter ──
-    logger.info(f"Pipeline Step 3/4: Applying filters (roi={use_roi}, mode={roi_mode})")
+    appearance_label = f", appearance={appearance['color']}" if appearance else ""
+    logger.info(
+        f"Pipeline Step 3/4: Applying filters "
+        f"(roi={use_roi}, mode={roi_mode}{appearance_label})"
+    )
     effective_roi = roi_polygon if use_roi else None
     filtered_tracks = apply_filters(
         tracks=tracks,
@@ -103,6 +108,8 @@ async def run_pipeline(
         roi_mode=roi_mode,
         min_track_frames=min_track_frames,
         min_confidence=min_confidence,
+        appearance=appearance,
+        video_path=video_path,
     )
     tracks_after_filter = len(filtered_tracks)
 
@@ -152,6 +159,7 @@ async def run_pipeline(
         "video_fps": fps,
         "video_duration_sec": video_duration,
         "task": task_name,
+        "appearance_filter": appearance,   # None when not used
     }
 
     logger.info(

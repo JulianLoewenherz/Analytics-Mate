@@ -2,15 +2,20 @@
 Track filtering functions.
 
 Each filter is a pure function: tracks in, tracks out.
-Filters run in sequence: quality → ROI → (future: appearance, association).
+Filters run in sequence: quality → ROI → appearance → (future: association).
 
 Spec: PIPELINE-LOGIC.md Section 7.3 and Section 9.1.
 """
 
 import logging
+from typing import Optional
+
+import cv2
+import numpy as np
 from shapely.geometry import Point, Polygon
 
 from app.vision.models import Track, Detection
+from app.vision.color import get_color_fraction, crop_to_region
 
 logger = logging.getLogger(__name__)
 
@@ -167,12 +172,104 @@ def filter_tracks_by_roi(
     return result
 
 
+def filter_by_appearance(
+    tracks: list[Track],
+    video_path: str,
+    color: str,
+    color_region: str = "torso",
+    color_threshold: float = 0.12,
+    n_samples: int = 8,
+) -> list[Track]:
+    """
+    Keep only tracks where the object's bounding box shows the target color.
+
+    Strategy:
+        - Open the video once with OpenCV.
+        - For each track, sample up to `n_samples` evenly-spaced detections.
+        - Seek to the detection's frame, crop to `color_region` within the bbox.
+        - Compute fraction of pixels matching `color` using HSV ranges.
+        - Keep the track if the mean color fraction across samples >= `color_threshold`.
+
+    Args:
+        tracks: Filtered tracks (after quality + ROI filters).
+        video_path: Path to the original video file (needed to read frames).
+        color: Target color name, e.g. "green", "red", "blue".
+        color_region: Bbox sub-region to sample — "torso"|"upper"|"lower"|"full".
+        color_threshold: Minimum mean color fraction to keep a track (default 12 %).
+        n_samples: How many frames to sample per track (default 8).
+
+    Returns:
+        Tracks whose appearance matches the target color.
+    """
+    if not tracks:
+        return tracks
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        logger.error(f"filter_by_appearance: cannot open video at {video_path}")
+        return tracks  # fail-open: return all tracks rather than crashing
+
+    result: list[Track] = []
+
+    for track in tracks:
+        if not track.detections:
+            continue
+
+        # Sample evenly-spaced detections (at most n_samples)
+        dets = track.detections
+        step = max(1, len(dets) // n_samples)
+        sampled = dets[::step][:n_samples]
+
+        fractions: list[float] = []
+
+        for det in sampled:
+            # Seek to the frame
+            cap.set(cv2.CAP_PROP_POS_FRAMES, det.frame_index)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                continue
+
+            crop = crop_to_region(
+                frame,
+                det.bbox.x1, det.bbox.y1,
+                det.bbox.x2, det.bbox.y2,
+                color_region,
+            )
+            if crop.size == 0:
+                continue
+
+            frac = get_color_fraction(crop, color)
+            fractions.append(frac)
+
+        if not fractions:
+            # Could not read any frame — keep track to avoid false negatives
+            result.append(track)
+            continue
+
+        mean_frac = np.mean(fractions)
+        if mean_frac >= color_threshold:
+            result.append(track)
+
+    cap.release()
+
+    kept = len(result)
+    dropped = len(tracks) - kept
+    logger.info(
+        f"filter_by_appearance (color='{color}', region='{color_region}', "
+        f"threshold={color_threshold:.0%}): "
+        f"{len(tracks)} tracks → {kept} kept, {dropped} dropped"
+    )
+    return result
+
+
 def apply_filters(
     tracks: list[Track],
     roi_polygon: list[dict] | None = None,
     roi_mode: str = "inside",
     min_track_frames: int = 5,
     min_confidence: float = 0.4,
+    appearance: Optional[dict] = None,
+    video_path: Optional[str] = None,
 ) -> list[Track]:
     """
     Apply all filters in sequence. Convenience function used by the pipeline runner.
@@ -183,6 +280,8 @@ def apply_filters(
         roi_mode: ROI filtering mode (default: "inside").
         min_track_frames: Minimum detections per track.
         min_confidence: Minimum detection confidence.
+        appearance: Optional AppearanceFilter dict with "color" and "color_region" keys.
+        video_path: Path to video file — required when appearance filter is set.
 
     Returns:
         Filtered tracks.
@@ -201,6 +300,18 @@ def apply_filters(
         else:
             logger.warning("ROI polygon is invalid, skipping ROI filter")
 
-    # Future: appearance filter, object association filter
+    # 3. Appearance (color) filter
+    if appearance and appearance.get("color"):
+        if video_path:
+            result = filter_by_appearance(
+                tracks=result,
+                video_path=video_path,
+                color=appearance["color"],
+                color_region=appearance.get("color_region", "torso"),
+            )
+        else:
+            logger.warning(
+                "Appearance filter requested but video_path not provided — skipping"
+            )
 
     return result

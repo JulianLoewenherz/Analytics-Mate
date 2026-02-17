@@ -43,11 +43,11 @@ You have a **fully functional Phase 1-2 implementation** of the PIPELINE-LOGIC.m
 
 You're at a **critical decision point**:
 
-1. **Option A:** Add more metrics (occupancy, etc.) — broadens capabilities quickly (traffic_count ✅ done)
+1. **Option A:** Add more metrics (object association, etc.) — broadens capabilities quickly (traffic_count ✅ done)
 2. **Option B:** Add Phase 4 features (pose, appearance filters) — enables complex queries
-3. **Option C:** Polish existing metric (caching, better visualizations) — improves UX before expansion
+3. **Option C:** Polish existing metric (better visualizations) — improves UX before expansion
 
-**Recommendation:** **Option A (Add 2-3 new metrics)** for maximum impact with minimal risk. See [Section 8](#next-best-steps--recommendations) for details.
+**Recommendation:** **Option A (Add more metrics)** for maximum impact with minimal risk. See [Section 8](#next-best-steps--recommendations) for details.
 
 ---
 
@@ -59,9 +59,9 @@ You're at a **critical decision point**:
 |-------|--------|--------------|-------|
 | **Phase 1:** Foundation (One metric, hardcoded plan) | ✅ **Complete** | 100% | dwell_count works end-to-end with ROI |
 | **Phase 2:** LLM Planning + ROI Instruction | ✅ **Complete** | 100% | Planner generates plans from NL prompts |
-| **Phase 3:** More Metrics | 🟡 **In Progress** | ~33% | dwell_count + traffic_count done; occupancy next |
+| **Phase 3:** More Metrics | 🟡 **In Progress** | ~33% | dwell_count + traffic_count done; object association next |
 | **Phase 4:** Pose + Appearance | ⚠️ **Not Started** | 0% | No pose model, no color filtering |
-| **Phase 5:** Polish + Caching | 🟡 **Partial** | 30% | Has visualizer, but no vision caching |
+| **Phase 5:** Polish | 🟡 **Partial** | 30% | Has visualizer; progress tracking pending |
 
 ### Implemented vs. Planned (PIPELINE-LOGIC.md)
 
@@ -82,7 +82,6 @@ You're at a **critical decision point**:
 | **Metrics (8 planned)** |
 | dwell_count | ✅ | ✅ | `backend/app/metrics/dwell.py` |
 | traffic_count | ✅ | ✅ | `backend/app/metrics/traffic.py` — entries, exits, crosses |
-| occupancy | ✅ | ❌ | Not implemented |
 | count_per_interval | ✅ | ❌ | Not implemented |
 | exit_reentry | ✅ | ❌ | Not implemented |
 | pose_event_count | ✅ | ❌ | Not implemented |
@@ -98,7 +97,7 @@ You're at a **critical decision point**:
 | Color-coded tracks | ✅ | ✅ | Red/yellow/green in dwell visualizer |
 | Timeline charts | ✅ | ❌ | Not implemented |
 | **Performance** |
-| Vision result caching | ✅ | ❌ | Not implemented (re-runs YOLO every time) |
+| Vision result caching | ✅ | ❌ | Not planned |
 | Progress tracking | ✅ | ❌ | Not implemented |
 
 ---
@@ -326,29 +325,23 @@ All of these work end-to-end:
    - Count modes: unique_entries, unique_exits, unique_crossings
    - Visualizer with permanent green state; mode-specific aggregates
 
-2. **`occupancy`** — **NEXT**
-   - Purpose: Count distinct tracks inside ROI per time slice
-   - Use cases: "Peak occupancy in store", "How many people at peak?"
-   - Returns: Timeline data for charts
-   - Complexity: **Low** (per-frame counting)
-
-3. **`count_per_interval`**
+2. **`count_per_interval`**
    - Purpose: Bucket traffic into time windows, compute avg per window
    - Use cases: "Average crossings per red light cycle"
    - Requires: traffic_count + time windowing
    - Complexity: **Medium**
 
-4. **`exit_reentry`**
+3. **`exit_reentry`**
    - Purpose: Tracks that leave ROI then return
    - Use cases: "People who leave and come back"
    - Complexity: **Medium** (state tracking)
 
-5. **`pose_event_count`**
+4. **`pose_event_count`**
    - Purpose: Count pose-based events (hand raise, punch, wave)
    - Requires: YOLO-Pose model, keypoint rules
    - Complexity: **High** (new vision module)
 
-6. **`object_co_occurrence_dwell`**
+5. **`object_co_occurrence_dwell`**
    - Purpose: Time person is associated with object (phone, table)
    - Requires: Multi-class detection, object association filter
    - Complexity: **High** (association logic)
@@ -370,24 +363,19 @@ All of these work end-to-end:
 3. **ROI Modes (enters/exits/crosses)** ✅ **DONE**
    - All implemented in `backend/app/pipeline/filters.py`
 
-#### Phase 5: Polish & Performance (1/4 implemented)
+#### Phase 5: Polish & Performance (1/3 implemented)
 
-1. **Vision Caching** ❌
-   - Purpose: Cache YOLO tracks to avoid re-running vision on param changes
-   - Impact: Massive speedup for iterative testing
-   - Complexity: **Medium** (cache key = video hash + vision config)
-
-2. **Progress Tracking** ❌
+1. **Progress Tracking** ❌
    - Purpose: Show "Step 2/4: Running vision..." during pipeline
    - Requires: SSE or polling endpoint
    - Complexity: **Low**
 
-3. **Timeline Charts** ❌
-   - Purpose: Occupancy over time, count per interval
+2. **Timeline Charts** ❌
+   - Purpose: Count per interval, time-series data
    - Requires: Frontend chart library (recharts?)
    - Complexity: **Low**
 
-4. **Annotated Frames** ✅
+3. **Annotated Frames** ✅
    - Already have annotated video
    - Could add per-event frame snapshots
    - Complexity: **Low**
@@ -413,7 +401,6 @@ All of these work end-to-end:
 
 | Query Type | Example | Why Not? |
 |------------|---------|----------|
-| Occupancy | "How many people in store at peak?" | Missing occupancy metric |
 | Interval stats | "Average crossings per red light" | Missing count_per_interval metric |
 | Re-entry | "People who leave and come back" | Missing exit_reentry metric |
 | Color-based | "Person in green shirt" | Missing appearance filter |
@@ -548,27 +535,7 @@ No schema changes needed!
 → Plan: { task: "traffic_count", filters: { roi_mode: "crosses" } }
 ```
 
-#### 2. `occupancy` (Implement Second) ⭐
-
-**Complexity:** Low (2-3 hours)  
-**Impact:** High (enables peak/occupancy queries + timeline charts)
-
-**What to build:**
-- File: `backend/app/metrics/occupancy.py`
-- Function: `compute_occupancy(...)`
-- Logic: Per time slice (1 second), count distinct track IDs with center inside ROI
-- Returns: `{ aggregates: { peak_occupancy, peak_time_sec, avg_occupancy }, timeline: [...] }`
-
-**Also requires:**
-- Frontend timeline chart component (optional for MVP)
-
-**Test query:**
-```
-"How many people in the store at peak?"
-→ Plan: { task: "occupancy", params: { time_resolution_seconds: 1 } }
-```
-
-#### 3. `count_per_interval` (Implement Third)
+#### 2. `count_per_interval` (Implement Second)
 
 **Complexity:** Medium (3-4 hours)  
 **Impact:** Medium (specific use cases like red light cycles)
@@ -611,26 +578,20 @@ No schema changes needed!
 
 ### Quick Wins (Can Do in 1-2 Hours Each)
 
-1. **Add vision caching** (Phase 5)
-   - Key: hash(video_path + model + detect_classes + confidence + sample_fps)
-   - Save tracks to `backend/cache/{video_hash}/{config_hash}/tracks.json`
-   - Load from cache if key matches
-   - Impact: 10-30x speedup for parameter tweaks
-
-2. **Implement ROI "enters" and "crosses" modes**
+1. **Implement ROI "enters" and "crosses" modes**
    - Enhance `filter_tracks_by_roi` in `filters.py`
    - "enters": detect outside→inside transition per track
    - "crosses": track was both inside and outside at some point
    - Impact: Required for traffic_count
 
-3. **Add progress tracking**
+2. **Add progress tracking**
    - Log progress to a file: `backend/progress/{video_id}.json`
    - Frontend polls every 500ms
    - Show "Step 2/4: Running vision..." in UI
 
-4. **Timeline chart for occupancy**
+3. **Timeline chart for interval data**
    - Use recharts or similar library
-   - Plot timeline data from occupancy metric
+   - Plot timeline data from count_per_interval metric
    - Show in Evidence pane
 
 ---
@@ -653,50 +614,7 @@ No schema changes needed!
 
 ### Architecture Decisions
 
-#### 1. Vision Caching Strategy
-
-**Current:** No caching (re-runs YOLO every time)  
-**Problem:** Slow iteration when tweaking params  
-**Solution:** Cache tracks by `(video_hash, model, detect_classes, confidence, sample_fps)`
-
-**Implementation:**
-```python
-# backend/app/pipeline/cache.py
-import hashlib
-import json
-from pathlib import Path
-
-CACHE_DIR = Path("backend/cache")
-
-def compute_cache_key(video_path: str, vision_config: dict) -> str:
-    video_hash = hashlib.md5(open(video_path, "rb").read()).hexdigest()[:8]
-    config_str = json.dumps(vision_config, sort_keys=True)
-    config_hash = hashlib.md5(config_str.encode()).hexdigest()[:8]
-    return f"{video_hash}/{config_hash}"
-
-def get_cached_tracks(cache_key: str) -> list[Track] | None:
-    cache_path = CACHE_DIR / cache_key / "tracks.json"
-    if cache_path.exists():
-        data = json.loads(cache_path.read_text())
-        return [Track.model_validate(t) for t in data]
-    return None
-
-def save_tracks_to_cache(cache_key: str, tracks: list[Track]):
-    cache_path = CACHE_DIR / cache_key / "tracks.json"
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps([t.model_dump() for t in tracks]))
-```
-
-**Use in runner.py:**
-```python
-cache_key = compute_cache_key(video_path, vision_config)
-tracks = get_cached_tracks(cache_key)
-if tracks is None:
-    tracks = run_detection_and_tracking(...)
-    save_tracks_to_cache(cache_key, tracks)
-```
-
-#### 2. ROI Mode Implementation (enters/crosses)
+#### 1. ROI Mode Implementation (enters/crosses)
 
 **Current:** Only "inside" and "outside" work  
 **Needed for:** traffic_count, entry/exit metrics
@@ -891,35 +809,7 @@ curl -X POST "http://localhost:8000/api/video/YOUR_VIDEO_ID/analyze" \
 
 ---
 
-### ▶️ Priority 2: Add `occupancy` Metric (2-3 hours) — READY TO START
-
-**What it achieves:**
-- ✅ **Unlocks 4+ new query types:** Peak occupancy, average density, capacity monitoring, time-series analysis
-- ✅ **Shows flexibility:** Completely different output (timeline data for charts)
-- ✅ **Real-world applications:** Retail (peak hours), restaurants (capacity), offices (space utilization)
-- ✅ **LinkedIn demo:** "System produces timeline visualizations, not just numbers"
-- ✅ **Visual impact:** Timeline charts look impressive in screenshots/videos
-
-**Implementation checklist:**
-1. Create `backend/app/metrics/occupancy.py`:
-   - Per time slice (1 second), count distinct track IDs inside ROI
-   - Return timeline array: `[{time_sec: 0, count: 3}, {time_sec: 1, count: 4}, ...]`
-   - Compute aggregates: peak_occupancy, peak_time_sec, avg_occupancy
-2. Register in `registry.py` and `schema.py`
-3. Update LLM system prompt
-
-**Test queries:**
-```
-"How many people in the store at peak?"
-"What's the average occupancy?"
-"When is the busiest time?"
-```
-
-**LinkedIn value:** Timeline data is visually impressive. Shows system does aggregation AND time-series. Restaurant/retail appeal.
-
----
-
-### 🎯 Priority 3: Enable Basic Multi-Object Detection (3-4 hours)
+### ▶️ Priority 2: Enable Basic Multi-Object Detection (3-4 hours)
 
 **What it achieves:**
 - ✅ **Unlocks real-world applications:** Table turnover (restaurant), phone usage (workplace), desk occupancy
@@ -978,43 +868,6 @@ curl -X POST "http://localhost:8000/api/video/YOUR_VIDEO_ID/analyze" \
 
 ---
 
-### 🎯 Priority 4: Add Vision Caching (2 hours)
-
-**What it achieves:**
-- ✅ **10-30x speedup** when tweaking parameters
-- ✅ **Professional polish:** Fast iteration shows production-quality engineering
-- ✅ **Demo experience:** Re-running queries is instant (impressive during live demos)
-
-**Implementation checklist:**
-1. Create `backend/app/pipeline/cache.py`:
-   ```python
-   def compute_cache_key(video_path: str, vision_config: dict) -> str:
-       video_hash = hashlib.md5(open(video_path, "rb").read()).hexdigest()[:8]
-       config_str = json.dumps(vision_config, sort_keys=True)
-       config_hash = hashlib.md5(config_str.encode()).hexdigest()[:8]
-       return f"{video_hash}/{config_hash}"
-   
-   def get_cached_tracks(cache_key: str) -> list[Track] | None:
-       cache_path = Path("backend/cache") / cache_key / "tracks.json"
-       if cache_path.exists():
-           data = json.loads(cache_path.read_text())
-           return [Track.model_validate(t) for t in data]
-       return None
-   
-   def save_tracks_to_cache(cache_key: str, tracks: list[Track]):
-       cache_path = Path("backend/cache") / cache_key / "tracks.json"
-       cache_path.parent.mkdir(parents=True, exist_ok=True)
-       cache_path.write_text(json.dumps([t.model_dump() for t in tracks]))
-   ```
-2. Modify `backend/app/pipeline/runner.py`:
-   - Before running YOLO, check cache
-   - After YOLO runs, save to cache
-3. Add cache directory to `.gitignore`
-
-**LinkedIn value:** Shows you understand performance optimization. Fast demos are impressive.
-
----
-
 ### 📊 LinkedIn Showcase Package (After Above Steps)
 
 **What you'll be able to demonstrate:**
@@ -1022,15 +875,14 @@ curl -X POST "http://localhost:8000/api/video/YOUR_VIDEO_ID/analyze" \
 #### Diverse Query Types:
 1. **Timing queries** (dwell_count): "How long do people wait?"
 2. **Counting queries** (traffic_count): "How many people enter?"
-3. **Density queries** (occupancy): "What's peak occupancy?"
-4. **Business queries** (dwell + association): "Table turnover time?"
+3. **Business queries** (dwell + association): "Table turnover time?"
 
 #### Real-World Applications:
 - 🏪 **Retail:** Foot traffic, display engagement, queue wait times
-- 🍽️ **Restaurant:** Table turnover, average seat time, peak capacity
+- 🍽️ **Restaurant:** Table turnover, average seat time
 - 🚦 **Transportation:** Crosswalk counting, bus boarding, parking entries
-- 🔒 **Security:** Zone intrusions, loitering detection, occupancy limits
-- 🏢 **Workplace:** Desk occupancy, meeting room usage
+- 🔒 **Security:** Zone intrusions, loitering detection
+- 🏢 **Workplace:** Meeting room usage
 
 #### Technical Highlights:
 - ✅ Natural language → structured plans (LLM integration)
@@ -1038,9 +890,8 @@ curl -X POST "http://localhost:8000/api/video/YOUR_VIDEO_ID/analyze" \
 - ✅ Object association (person-table, person-phone)
 - ✅ Spatial filtering (ROI drawing)
 - ✅ Real-time visualizations (annotated videos)
-- ✅ Performance optimization (caching)
 
-**Estimated total implementation time:** 8-12 hours
+**Estimated total implementation time:** 6-10 hours
 
 ---
 
@@ -1049,10 +900,9 @@ curl -X POST "http://localhost:8000/api/video/YOUR_VIDEO_ID/analyze" \
 **Demo Video Ideas:**
 
 1. **"Flexible Analytics" Video** (30 seconds)
-   - Show 4 different queries on same video:
+   - Show 3 different queries on same video:
      - "How many people loiter for 5 seconds?" → dwell results
      - "How many people cross?" → traffic count
-     - "What's peak occupancy?" → timeline chart
      - "Table turnover time?" → grouped results
    - Tagline: "One system, endless questions"
 
@@ -1068,9 +918,8 @@ curl -X POST "http://localhost:8000/api/video/YOUR_VIDEO_ID/analyze" \
    - Tagline: "Composable pipeline architecture for video analytics"
 
 **Key Metrics to Highlight:**
-- "Handles 4+ distinct metric types with zero code changes"
+- "Handles 3+ distinct metric types with zero code changes"
 - "Supports 80 COCO object classes out-of-the-box"
-- "10-30x faster iteration with vision caching"
 - "Real-world applications: retail, restaurant, security, workplace"
 
 ---
@@ -1081,7 +930,8 @@ These add complexity without demonstrating flexibility:
 
 - ❌ **Pose detection** (requires new model, hyper-specific use case)
 - ❌ **Appearance filters** (color-based, niche use case)
-- ❌ **count_per_interval** (similar to occupancy, less visual)
+- ❌ **Vision caching** (not a priority)
+- ❌ **Occupancy metric** (not a priority)
 - ❌ **exit_reentry** (niche use case, less impressive)
 - ❌ **UI for plan editing** (not needed for demos)
 - ❌ **Multiple ROIs** (complexity without clear value)
@@ -1093,13 +943,12 @@ These add complexity without demonstrating flexibility:
 
 ### 🎯 Implementation Timeline
 
-**Week 1 (8-12 hours):**
+**Week 1 (6-10 hours):**
 - ~~Day 1-2: traffic_count metric + ROI modes (3 hours)~~ ✅ DONE
-- Day 3-4: occupancy metric (3 hours) — **NEXT**
-- Day 5-6: Object association + table turnover demo (4 hours)
-- Day 7: Vision caching + polish (2 hours)
+- Day 3-5: Object association + table turnover demo (4 hours) — **NEXT**
+- Day 6-7: Polish + progress tracking (2 hours)
 
-**Result:** Production-ready showcase with 4 working use cases.
+**Result:** Production-ready showcase with 3 working use cases.
 
 ---
 
@@ -1108,13 +957,11 @@ These add complexity without demonstrating flexibility:
 **Technical:**
 - ✅ 3+ metrics working end-to-end
 - ✅ Each metric demonstrates different query type
-- ✅ Vision caching for fast demos
 - ✅ Clean error handling
 - ✅ Professional visualizations
 
 **Demo:**
-- ✅ Can run 5+ different queries on same video
-- ✅ Results appear in <5 seconds (with cache)
+- ✅ Can run 3+ different queries on same video
 - ✅ Annotated videos look professional
 - ✅ No crashes or obvious bugs
 
@@ -1139,20 +986,16 @@ These add complexity without demonstrating flexibility:
 1. ✅ **Read this document** (you are here)
 2. ✅ **Add `traffic_count` metric** — DONE
    - ROI modes (enters, exits, crosses), visualizer, mode-specific aggregates
-3. ⭐ **Add `occupancy` metric** (2-3 hours, high impact) — **NEXT**
-   - Write the metric function
-   - Test with "How many people at peak?"
-4. 🎯 **Add object association + table turnover** (3-4 hours, impressive demo)
+3. ⭐ **Add object association + table turnover** (3-4 hours, impressive demo) — **NEXT**
    - Modify detector to return secondary detections
    - Implement association filter
    - Add `group_by` to dwell_count
-5. 🎯 **Add vision caching** (2 hours, massive speedup)
+4. 🎯 **Polish + progress tracking** (2 hours)
 
-**After these 4 additions:**
+**After these additions:**
 - ✅ **LinkedIn-ready** with diverse, flexible demonstrations
-- ✅ **3-4 distinct metric types** showing system flexibility
+- ✅ **3 distinct metric types** showing system flexibility
 - ✅ **Real-world business applications** (restaurant, retail, security)
-- ✅ **Professional polish** (fast performance, clean UX)
 - ✅ **Strong portfolio piece** with clear business value
 
 ### Don't Do (Yet):
@@ -1160,9 +1003,11 @@ These add complexity without demonstrating flexibility:
 - ❌ Refactor the JSON structure (it's good as-is)
 - ❌ Rewrite the pipeline (it's clean and extensible)
 - ❌ Start on pose/appearance (hyper-specific, less impressive)
+- ❌ Implement occupancy (deprioritized)
+- ❌ Implement vision caching (deprioritized)
 - ❌ Build a UI for plan editing (not needed for demos)
-- ❌ Add more than 3-4 metrics (diminishing returns for showcase)
+- ❌ Add more than 3 metrics (diminishing returns for showcase)
 
 ---
 
-**You've built a solid foundation. The hardest architectural decisions are behind you. Now it's about adding 3-4 diverse metrics to show flexibility, then you'll have a LinkedIn-worthy showcase of production-quality video analytics!**
+**You've built a solid foundation. The hardest architectural decisions are behind you. Now it's about adding object association to show multi-object flexibility, then you'll have a LinkedIn-worthy showcase of production-quality video analytics!**

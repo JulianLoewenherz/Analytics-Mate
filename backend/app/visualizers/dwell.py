@@ -53,6 +53,9 @@ def visualize_dwell(
 
     frame_lookup = build_frame_lookup(all_tracks)
 
+    # Track IDs that survived all filters (ROI + appearance + quality)
+    filtered_track_ids: set[int] = {t.track_id for t in filtered_tracks}
+
     # (track_id, frame_index) → inside ROI
     inside_roi_pairs: set[tuple[int, int]] = set()
     if roi_polygon_shapely:
@@ -62,7 +65,9 @@ def visualize_dwell(
                 if roi_polygon_shapely.contains(Point(cx, cy)):
                     inside_roi_pairs.add((det.track_id, det.frame_index))
     else:
-        for track in all_tracks:
+        # No ROI: only filtered (appearance-matched) tracks count as "inside"
+        # Tracks NOT in filtered_tracks render as "outside" (red) to show filtering
+        for track in filtered_tracks:
             for det in track.detections:
                 inside_roi_pairs.add((det.track_id, det.frame_index))
 

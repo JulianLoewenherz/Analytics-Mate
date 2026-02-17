@@ -34,7 +34,7 @@ The plan must be valid JSON with these fields:
 - params (object): Task-specific parameters. Required. For dwell_count: dwell_threshold_seconds (number). For traffic_count: count_mode ("unique_entries"|"unique_exits"|"unique_crossings"|"first_entry_only").
 - roi_instruction (string, optional): When use_roi is true, a short hint for where to draw the ROI, e.g. "Draw an ROI in front of the store." or "Draw an ROI on the crosswalk."
 - vision (object, optional): model, detect_classes, confidence_threshold.
-- filters (object, optional): roi_mode ("inside"|"enters"|"exits"|"crosses"|"outside"), min_track_frames.
+- filters (object, optional): roi_mode ("inside"|"enters"|"exits"|"crosses"|"outside"), min_track_frames, appearance ({{"color": string, "color_region": "torso"|"upper"|"lower"|"full"}}).
 
 ## Context for This Video
 - ROI exists: {roi_exists}
@@ -44,10 +44,12 @@ The plan must be valid JSON with these fields:
 ## Rules
 1. Output ONLY valid JSON. No markdown, no code fences, no extra text.
 2. task must be one of: {task_names}
-3. If the user mentions a zone, area, or region (store, crosswalk, door, etc.), set use_roi: true and provide roi_instruction.
-4. Extract numeric thresholds from the prompt (e.g. "10 seconds" → params.dwell_threshold_seconds: 10).
-5. Include an "explanation" field (string) summarizing your reasoning.
-6. Set vision.detect_classes to match the object(s) the user asked about. For single-object queries (e.g. cars, people), set detect_classes to [object]. For multi-class queries (e.g. person at table, person on phone), set detect_classes to all needed YOLO classes (e.g. ["person", "dining table"]).
+3. If the user mentions a zone, area, or region (store, crosswalk, door, entrance, etc.), set use_roi: true and provide roi_instruction.
+4. If the user does NOT mention a specific zone or location, set use_roi: false. Do not ask for an ROI when the question is about the whole video.
+5. Extract numeric thresholds from the prompt (e.g. "10 seconds" → params.dwell_threshold_seconds: 10).
+6. Include an "explanation" field (string) summarizing your reasoning.
+7. Set vision.detect_classes to match the object(s) the user asked about. For single-object queries (e.g. cars, people), set detect_classes to [object]. For multi-class queries (e.g. person at table, person on phone), set detect_classes to all needed YOLO classes (e.g. ["person", "dining table"]).
+8. If the user mentions a COLOR or clothing attribute, add filters.appearance: {{"color": "<color>", "color_region": "<region>"}}. Use "torso" for shirts/jackets, "lower" for pants/jeans, "upper" for hats, "full" for vehicles. Default to "torso" if ambiguous. Always combine with use_roi: false and dwell_threshold_seconds: 0 unless the user specifies otherwise.
 
 ## Examples
 
@@ -82,6 +84,46 @@ Plan:
 Prompt: "How many people exit the store?"
 Plan:
 {{"task": "traffic_count", "object": "person", "use_roi": true, "vision": {{"detect_classes": ["person"]}}, "filters": {{"roi_mode": "exits"}}, "params": {{"count_mode": "unique_exits"}}, "roi_instruction": "Draw an ROI at the store exit or doorway.", "explanation": "User wants exit count = traffic_count with exits mode."}}
+
+Prompt: "How many people are in this video?"
+Plan:
+{{"task": "dwell_count", "object": "person", "use_roi": false, "vision": {{"detect_classes": ["person"]}}, "params": {{"dwell_threshold_seconds": 0}}, "explanation": "Count all people in the video — no zone mentioned, use_roi: false, threshold 0 to count every appearance."}}
+
+Prompt: "Count all cars in the video"
+Plan:
+{{"task": "dwell_count", "object": "car", "use_roi": false, "vision": {{"detect_classes": ["car"]}}, "params": {{"dwell_threshold_seconds": 0}}, "explanation": "Count all cars visible — no spatial restriction, use_roi: false."}}
+
+Prompt: "How many dogs appear in this footage?"
+Plan:
+{{"task": "dwell_count", "object": "dog", "use_roi": false, "vision": {{"detect_classes": ["dog"]}}, "params": {{"dwell_threshold_seconds": 0}}, "explanation": "Count all dogs in the video — whole-video query, use_roi: false."}}
+
+Prompt: "How many people have a green shirt?"
+Plan:
+{{"task": "dwell_count", "object": "person", "use_roi": false, "vision": {{"detect_classes": ["person"]}}, "filters": {{"appearance": {{"color": "green", "color_region": "torso"}}}}, "params": {{"dwell_threshold_seconds": 0}}, "explanation": "Count people with green clothing — appearance filter on torso region, no ROI needed."}}
+
+Prompt: "Count people wearing red"
+Plan:
+{{"task": "dwell_count", "object": "person", "use_roi": false, "vision": {{"detect_classes": ["person"]}}, "filters": {{"appearance": {{"color": "red", "color_region": "torso"}}}}, "params": {{"dwell_threshold_seconds": 0}}, "explanation": "Count red-clothed people using appearance filter on torso, whole-video query."}}
+
+Prompt: "Did anyone in a blue jacket enter the store?"
+Plan:
+{{"task": "traffic_count", "object": "person", "use_roi": true, "vision": {{"detect_classes": ["person"]}}, "filters": {{"roi_mode": "enters", "appearance": {{"color": "blue", "color_region": "torso"}}}}, "params": {{"count_mode": "unique_entries"}}, "roi_instruction": "Draw an ROI at the store entrance.", "explanation": "Count blue-jacketed people entering the store — appearance filter combined with ROI entry detection."}}
+
+Prompt: "How many people are wearing yellow?"
+Plan:
+{{"task": "dwell_count", "object": "person", "use_roi": false, "vision": {{"detect_classes": ["person"]}}, "filters": {{"appearance": {{"color": "yellow", "color_region": "torso"}}}}, "params": {{"dwell_threshold_seconds": 0}}, "explanation": "Count people wearing yellow — appearance filter, no ROI."}}
+
+Prompt: "Count the people in black clothing"
+Plan:
+{{"task": "dwell_count", "object": "person", "use_roi": false, "vision": {{"detect_classes": ["person"]}}, "filters": {{"appearance": {{"color": "black", "color_region": "torso"}}}}, "params": {{"dwell_threshold_seconds": 0}}, "explanation": "Count people wearing black — appearance filter on torso region."}}
+
+Prompt: "How many people are wearing blue jeans?"
+Plan:
+{{"task": "dwell_count", "object": "person", "use_roi": false, "vision": {{"detect_classes": ["person"]}}, "filters": {{"appearance": {{"color": "blue", "color_region": "lower"}}}}, "params": {{"dwell_threshold_seconds": 0}}, "explanation": "Count people wearing blue jeans — appearance filter on lower body region."}}
+
+Prompt: "Count people with red pants"
+Plan:
+{{"task": "dwell_count", "object": "person", "use_roi": false, "vision": {{"detect_classes": ["person"]}}, "filters": {{"appearance": {{"color": "red", "color_region": "lower"}}}}, "params": {{"dwell_threshold_seconds": 0}}, "explanation": "Count people with red pants — lower body region for pants/jeans."}}
 """
 
 
