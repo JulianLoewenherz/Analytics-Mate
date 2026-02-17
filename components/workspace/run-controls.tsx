@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Play,
-  StepForward,
-  RotateCcw,
-  GitCompareArrows,
-  Loader2,
-} from "lucide-react";
+import { Play, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -29,17 +23,6 @@ export function RunControls({ videoId, onRun, isRunning, runComplete }: RunContr
     onRun();
   };
 
-  const handleStep = () => {
-    // TODO: Wire up to backend — advance one pipeline step (detect -> track -> metric)
-    setCurrentStep("Stepping: detect");
-    setProgress(25);
-  };
-
-  const handleRerun = () => {
-    setProgress(0);
-    setCurrentStep("");
-  };
-
   return (
     <div className="flex items-center gap-3 border-t border-border bg-card px-4 py-2.5">
       {/* Run button */}
@@ -55,38 +38,6 @@ export function RunControls({ videoId, onRun, isRunning, runComplete }: RunContr
           <Play className="h-3.5 w-3.5" />
         )}
         Run
-      </Button>
-
-      {/* Step through */}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleStep}
-        disabled={isRunning}
-        className="gap-1.5 bg-transparent"
-      >
-        <StepForward className="h-3.5 w-3.5" />
-        Step
-      </Button>
-
-      {/* Re-run */}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleRerun}
-        className="gap-1.5 bg-transparent"
-      >
-        <RotateCcw className="h-3.5 w-3.5" />
-        Re-run
-      </Button>
-
-      {/* Separator */}
-      <div className="h-5 w-px bg-border" />
-
-      {/* Compare toggle */}
-      <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
-        <GitCompareArrows className="h-3.5 w-3.5" />
-        Compare
       </Button>
 
       {/* Progress area */}
