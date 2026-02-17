@@ -16,7 +16,8 @@ from pydantic import BaseModel, Field
 class TaskName(str, Enum):
     """Registered task names. Only implemented tasks are included."""
     dwell_count = "dwell_count"
-    # Phase 3: traffic_count, occupancy, count_per_interval, exit_reentry
+    traffic_count = "traffic_count"
+    # Phase 3: occupancy, count_per_interval, exit_reentry
     # Phase 4: pose_event_count, object_co_occurrence_dwell
 
 
@@ -50,7 +51,7 @@ class VisionConfig(BaseModel):
 
 class Filters(BaseModel):
     """Filter configuration: ROI mode, appearance, object association, quality."""
-    roi_mode: Literal["inside", "enters", "crosses", "outside"] = "inside"
+    roi_mode: Literal["inside", "enters", "exits", "crosses", "outside"] = "inside"
     appearance: Optional[AppearanceFilter] = None
     object_association: Optional[ObjectAssociation] = None
     min_track_frames: int = 5

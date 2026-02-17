@@ -31,10 +31,10 @@ The plan must be valid JSON with these fields:
 - task (string): One of {task_names}. Required.
 - object (string): Primary object to detect, e.g. "person". Required.
 - use_roi (boolean): Whether to filter by user-drawn ROI polygon. Required.
-- params (object): Task-specific parameters. Required. For dwell_count: dwell_threshold_seconds (number).
+- params (object): Task-specific parameters. Required. For dwell_count: dwell_threshold_seconds (number). For traffic_count: count_mode ("unique_entries"|"unique_exits"|"unique_crossings"|"first_entry_only").
 - roi_instruction (string, optional): When use_roi is true, a short hint for where to draw the ROI, e.g. "Draw an ROI in front of the store." or "Draw an ROI on the crosswalk."
 - vision (object, optional): model, detect_classes, confidence_threshold.
-- filters (object, optional): roi_mode ("inside"|"enters"|"crosses"|"outside"), min_track_frames.
+- filters (object, optional): roi_mode ("inside"|"enters"|"exits"|"crosses"|"outside"), min_track_frames.
 
 ## Context for This Video
 - ROI exists: {roi_exists}
@@ -66,6 +66,22 @@ Plan:
 Prompt: "Who stops to look at the display for at least 3 seconds?"
 Plan:
 {{"task": "dwell_count", "object": "person", "use_roi": true, "vision": {{"detect_classes": ["person"]}}, "params": {{"dwell_threshold_seconds": 3}}, "roi_instruction": "Draw an ROI around the display or window.", "explanation": "Display engagement = dwell with 3s threshold."}}
+
+Prompt: "How many people cross the crosswalk?"
+Plan:
+{{"task": "traffic_count", "object": "person", "use_roi": true, "vision": {{"detect_classes": ["person"]}}, "filters": {{"roi_mode": "crosses"}}, "params": {{"count_mode": "unique_crossings"}}, "roi_instruction": "Draw an ROI on the crosswalk.", "explanation": "User wants to count people crossing the crosswalk = traffic_count with crosses mode."}}
+
+Prompt: "How many people enter the store?"
+Plan:
+{{"task": "traffic_count", "object": "person", "use_roi": true, "vision": {{"detect_classes": ["person"]}}, "filters": {{"roi_mode": "enters"}}, "params": {{"count_mode": "unique_entries"}}, "roi_instruction": "Draw an ROI at the store entrance.", "explanation": "User wants entry count = traffic_count with enters mode."}}
+
+Prompt: "Count cars entering the parking lot"
+Plan:
+{{"task": "traffic_count", "object": "car", "use_roi": true, "vision": {{"detect_classes": ["car"]}}, "filters": {{"roi_mode": "enters"}}, "params": {{"count_mode": "unique_entries"}}, "roi_instruction": "Draw an ROI at the parking lot entrance.", "explanation": "User wants car entry count = traffic_count."}}
+
+Prompt: "How many people exit the store?"
+Plan:
+{{"task": "traffic_count", "object": "person", "use_roi": true, "vision": {{"detect_classes": ["person"]}}, "filters": {{"roi_mode": "exits"}}, "params": {{"count_mode": "unique_exits"}}, "roi_instruction": "Draw an ROI at the store exit or doorway.", "explanation": "User wants exit count = traffic_count with exits mode."}}
 """
 
 

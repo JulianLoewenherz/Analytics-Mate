@@ -29,8 +29,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const EXAMPLE_QUESTIONS = [
   "How many people dwell in the ROI zone for 5 seconds or more?",
-  "How many people are bicycling?",
-  "How many people cross per walk signal on average?",
+  "How many people cross the crosswalk?",
+  "How many people enter the store?",
+  "How many people exit the store?",
   "What is the average dwell time at the entrance?",
 ];
 

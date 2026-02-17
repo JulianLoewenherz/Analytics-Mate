@@ -59,6 +59,33 @@ function DwellEventCard({ event, index }: { event: Record<string, unknown>; inde
   );
 }
 
+function TrafficEventCard({ event, index }: { event: Record<string, unknown>; index: number }) {
+  const type = (event.type as string) ?? "event";
+  const trackId = event.track_id as number;
+  const timeSec = (event.time_sec as number) ?? 0;
+  const isEntry = type === "entry";
+
+  return (
+    <div
+      className="flex flex-col gap-1 rounded-md border border-border bg-background p-2.5"
+      key={index}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-muted-foreground">Track {trackId}</span>
+        <Badge
+          variant={isEntry ? "default" : "secondary"}
+          className="text-[10px]"
+        >
+          {isEntry ? "entered" : "exited"}
+        </Badge>
+      </div>
+      <span className="text-[11px] font-mono text-muted-foreground">
+        at {formatTime(timeSec)}
+      </span>
+    </div>
+  );
+}
+
 function GenericEventCard({ event, index }: { event: Record<string, unknown>; index: number }) {
   const type = (event.type as string) ?? "event";
   const entries = Object.entries(event).filter(([k]) => k !== "type");
@@ -93,6 +120,9 @@ function EventCard({
 }) {
   if (task === "dwell_count") {
     return <DwellEventCard event={event} index={index} />;
+  }
+  if (task === "traffic_count" && (event.type === "entry" || event.type === "exit")) {
+    return <TrafficEventCard event={event} index={index} />;
   }
   return <GenericEventCard event={event} index={index} />;
 }
